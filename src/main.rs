@@ -297,28 +297,11 @@ fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
 }
 
 fn mount_skyrim_data_dir() -> Result<(), &'static str> {
-    let skyrim_data_dir = get_skyrim_data_dir().unwrap();
-    let temp_dir = TempDir::new().unwrap();
+    let skyrim_data_dir = get_skyrim_data_dir()?;
 
-    let mut lower_dirs = Vec::<PathBuf>::new();
-    for m in get_active_mods(&get_active_profile())?.iter() {
-        let squash_mount_dir = temp_dir.path().join(m);
-        verify_directory(&squash_mount_dir).unwrap();
-
-        let mut mount_squashfs = shell(format!(
-            "squashfuse \"{}\" \"{}\"",
-            get_mod_dir(m).unwrap().to_string_lossy(),
-            squash_mount_dir.to_string_lossy()
-        ));
-
-        mount_squashfs
-            .execute()
-            .map_err(|_| "Failed to execute command")?;
-
-        lower_dirs.push(squash_mount_dir);
-    }
-
-    //let mut lower_dirs: Vec<PathBuf> = mods.iter().rev().map(|m| temp_dir.path().join(m)).collect();
+    let mut lower_dirs = get_active_mods(&get_active_profile())?.into_iter()
+        .filter_map(|m| mount_mod(&m).ok())
+        .collect::<Vec<PathBuf>>();
     lower_dirs.push(skyrim_data_dir.clone());
 
     let upper_dir = get_overwrite_dir().unwrap();
