@@ -299,7 +299,8 @@ fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
 fn mount_skyrim_data_dir() -> Result<(), &'static str> {
     let skyrim_data_dir = get_skyrim_data_dir()?;
 
-    let mut lower_dirs = get_active_mods(&get_active_profile())?.into_iter()
+    let mut lower_dirs = get_active_mods(&get_active_profile())?
+        .into_iter()
         .filter_map(|m| mount_mod(&m).ok())
         .collect::<Vec<PathBuf>>();
     lower_dirs.push(skyrim_data_dir.clone());
@@ -336,7 +337,7 @@ fn unmount_directory(dir: &Path) -> Result<(), &'static str> {
     let mut command = shell(format!("umount {}", dir_string));
     match command.execute().map_err(|_| "Failed to execute command")? {
         Some(0) => Ok(()),
-        _ => Err("Failed to umount overlayfs")
+        _ => Err("Failed to umount overlayfs"),
     }
 }
 
@@ -431,22 +432,12 @@ fn main() {
     // Verify directories exist
     trace!("Verifying directories");
 
-    if let Err(e) = verify_directory(&get_data_dir().unwrap()) {
-        error!("{}", e);
-        return;
-    }
-
-    if let Err(e) = verify_directory(&get_mods_dir().unwrap()) {
-        error!("{}", e);
-        return;
-    }
-
-    if let Err(e) = verify_directory(&get_overwrite_dir().unwrap()) {
-        error!("{}", e);
-        return;
-    }
-
-    if let Err(e) = verify_directory(&get_profiles_dir().unwrap()) {
+    if let Err(e) = || -> Result<(), &'static str> {
+        verify_directory(&get_data_dir()?)?;
+        verify_directory(&get_mods_dir()?)?;
+        verify_directory(&get_overwrite_dir()?)?;
+        verify_directory(&get_profiles_dir()?)
+    }() {
         error!("{}", e);
         return;
     }
