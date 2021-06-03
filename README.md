@@ -8,6 +8,25 @@ Requires:
 - [squashfuse](https://github.com/vasi/squashfuse) (to mount squashfs images)
 - [fuse-overlayfs](https://github.com/containers/fuse-overlayfs) (to mount mods on top of the Skyrim data directory)
 
+## Usage
+```bash
+export TORYGG_SKYRIM_INSTALL_DIRECTORY=/path/to/Skyrim/folder  # Needed to find the Skyrim folder
+export TORYGG_USER_DIRECTORY=/path/to/wine/user/dir  # Needed to find wine/proton user dir for to handle configs and plugins.txt
+
+torygg install <path/to/mod_archive> <desired_mod_name> # Install a mod  
+torygg activate <mod_name>  # Activate a mod  
+torygg mount  # Mount the mod overlayfs over the skyrim data directory
+```  
+Now launch Skyrim through Steam.
+Skyrim (I think) will detect all plugins and fill the plugins.txt.
+You will then need to then add a `*` beside each entry in the plugins.txt file and modify the load order to suit.  
+```bash
+torygg umount  # Unmount the overlayfs  
+torygg help  # List of commands
+```
+
+## Info
+
 Uses SquashFS images to store installed mods, these images are then mounted in temporary directories. OverlayFS is then used to overlay the mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
 
 Todo:
