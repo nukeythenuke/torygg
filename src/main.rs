@@ -125,52 +125,47 @@ fn get_profiles() -> Result<Vec<String>, &'static str> {
 }
 
 fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), &'static str> {
-    let path = get_profiles_dir().ok_or("Couldn't get profiles dir")?.join(profile_name);
+    let path = get_profiles_dir()
+        .ok_or("Couldn't get profiles dir")?
+        .join(profile_name);
     if path.exists() {
         Err("Profile already exists!")
     } else {
         verify_directory(&path)?;
-        Ok(profiles.push(profile_name.to_owned()))
+        profiles.push(profile_name.to_owned());
+        Ok(())
     }
 }
 
 fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
-    if is_mod_installed(mod_name)? && !is_mod_active(profile_name, mod_name) {
-        // Discover plugin files and store their names
-        let mut plugins = String::new();
+    if !is_mod_installed(mod_name)? {
+        Err("Mod not installed")
+    } else if is_mod_active(profile_name, mod_name) {
+        Err("Mod already active")
+    } else {
+        // Discover plugins
         let mod_dir = mount_mod(mod_name)?;
-
-        for entry in WalkDir::new(mod_dir).min_depth(1).max_depth(1) {
-            let entry = entry.map_err(|_| "Invalid entry")?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                continue;
-            }
-
-            if let Some(extension) = path.extension() {
-                let extension = extension
-                    .to_str()
-                    .ok_or("Can't convert extension to &str")?;
-                match extension {
-                    "esp" | "esm" | "esl" => {
-                        plugins.push_str(
-                            path.file_name()
-                                .ok_or("No file name")?
-                                .to_str()
-                                .ok_or("Can't convert extension to &str")?,
-                        );
-                        plugins.push('\n')
-                    }
-                    _ => (),
-                }
-            }
-        }
+        let plugins = fs::read_dir(mod_dir)
+            .map_err(|_| "Failed to read mod dir")?
+            .filter_map(|e| Some(e.ok()?.path()))
+            .filter(|e| e.extension().is_some())
+            .filter(|e| e.extension().unwrap().to_str().is_some())
+            .filter(|e| {
+                matches!(
+                    e.extension().unwrap().to_str().unwrap(),
+                    "esp" | "esm" | "esl"
+                )
+            })
+            .filter_map(|e| {
+                (!e.is_dir())
+                    .then(|| ())
+                    .and_then(|_| Some(e.file_name()?.to_str()?.to_owned()))
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
 
         fs::write(get_profile_mods_dir(profile_name).join(mod_name), plugins)
-            .map_err(|_| "Couldn't write to profile mods dir")
-    } else {
-        Err("Mod not installed or is already active")
+            .map_err(|_| "Failed to write to profile's mods dir")
     }
 }
 
