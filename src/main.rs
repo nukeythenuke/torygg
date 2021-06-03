@@ -158,7 +158,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
             .collect::<Vec<String>>()
             .join("\n");
 
-        fs::write(get_profile_mods_dir(profile_name).join(mod_name), plugins)
+        fs::write(get_profile_mods_dir(profile_name)?.join(mod_name), plugins)
             .map_err(|_| "Failed to write to profile's mods dir")
     }
 }
@@ -169,13 +169,13 @@ fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str
     } else if !is_mod_active(profile_name, mod_name)? {
         Err("Mod is not active")
     } else {
-        fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name))
+        fs::remove_file(get_profile_mods_dir(profile_name)?.join(mod_name))
             .map_err(|_| "Failed to remove mod file")
     }
 }
 
 fn get_active_mods(profile_name: &str) -> Result<Vec<String>, &'static str> {
-    Ok(fs::read_dir(get_profile_mods_dir(profile_name))
+    Ok(fs::read_dir(get_profile_mods_dir(profile_name)?)
         .map_err(|_| "Could not read dir")?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
@@ -242,16 +242,16 @@ fn get_profiles_dir() -> Result<PathBuf, &'static str> {
     Ok(dir)
 }
 
-fn get_profile_dir(profile_name: &str) -> PathBuf {
-    let dir = get_profiles_dir().unwrap().join(profile_name);
-    verify_directory(&dir).unwrap();
-    dir
+fn get_profile_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
+    let dir = get_profiles_dir()?.join(profile_name);
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
-fn get_profile_mods_dir(profile_name: &str) -> PathBuf {
-    let dir = get_profile_dir(&profile_name).join("Mods");
-    verify_directory(&dir).unwrap();
-    dir
+fn get_profile_mods_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
+    let dir = get_profile_dir(&profile_name)?.join("Mods");
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
 // Mount a directory using fuse-overlayfs
