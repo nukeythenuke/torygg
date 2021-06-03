@@ -261,10 +261,8 @@ fn mount_directory(
     work_dir: &Path,
     mount_dir: &Path,
 ) -> Result<(), &'static str> {
-    let joined_paths = lower_dirs
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .fold(String::new(), |left, right| left + ":" + &right);
+    let joined_paths = std::env::join_paths(lower_dirs).map_err(|_| "failed to join paths")?;
+    let joined_paths = joined_paths.to_string_lossy();
 
     let mut command = shell(format!(
         "fuse-overlayfs -o lowerdir=\"{}\",upperdir=\"{}\",workdir=\"{}\" \"{}\"",
