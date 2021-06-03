@@ -96,7 +96,7 @@ fn get_installed_mods() -> Result<Vec<String>, &'static str> {
     Ok(
         fs::read_dir(get_mods_dir().ok_or("Could not get mods dir")?)
             .map_err(|_| "Could not read mods dir")?
-            .filter_map(|e| e.ok().and_then(|e| Some(e.path())))
+            .filter_map(|e| Some(e.ok()?.path()))
             .filter_map(|e| {
                 (!e.is_dir())
                     .then(|| ())
