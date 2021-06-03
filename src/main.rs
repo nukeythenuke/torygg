@@ -87,14 +87,14 @@ fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
     }
 }
 
-fn get_mod_dir(mod_name: &str) -> Option<PathBuf> {
+fn get_mod_dir(mod_name: &str) -> Result<PathBuf, &'static str> {
     let dir = get_mods_dir()?.join(mod_name);
-    dir.exists().then(|| dir)
+    dir.exists().then(|| dir).ok_or("mod dir does not exist")
 }
 
 fn get_installed_mods() -> Result<Vec<String>, &'static str> {
     Ok(
-        fs::read_dir(get_mods_dir().ok_or("Could not get mods dir")?)
+        fs::read_dir(get_mods_dir()?)
             .map_err(|_| "Could not read mods dir")?
             .filter_map(|e| Some(e.ok()?.path()))
             .filter_map(|e| {
@@ -112,7 +112,7 @@ fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
 
 fn get_profiles() -> Result<Vec<String>, &'static str> {
     Ok(
-        fs::read_dir(get_profiles_dir().ok_or("Could not get profiles dir")?)
+        fs::read_dir(get_profiles_dir()?)
             .map_err(|_| "Could not read profiles dir")?
             .filter_map(|e| Some(e.ok()?.path()))
             .filter_map(|e| {
@@ -125,8 +125,7 @@ fn get_profiles() -> Result<Vec<String>, &'static str> {
 }
 
 fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), &'static str> {
-    let path = get_profiles_dir()
-        .ok_or("Couldn't get profiles dir")?
+    let path = get_profiles_dir()?
         .join(profile_name);
     if path.exists() {
         Err("Profile already exists!")
@@ -218,22 +217,22 @@ fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
     Ok(get_wine_user_dir()?.join("My Documents/My Games/Skyrim Special Edition"))
 }
 
-fn get_data_dir() -> Option<PathBuf> {
-    let dir = dirs::data_dir()?.join(APP_NAME);
-    verify_directory(&dir).ok()?;
-    Some(dir)
+fn get_data_dir() -> Result<PathBuf, &'static str> {
+    let dir = dirs::data_dir().ok_or("Could not find torygg's data dir")?.join(APP_NAME);
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
-fn get_mods_dir() -> Option<PathBuf> {
+fn get_mods_dir() -> Result<PathBuf, &'static str> {
     let dir = get_data_dir()?.join(MODS_SUBDIR);
-    verify_directory(&dir).ok()?;
-    Some(dir)
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
-fn get_overwrite_dir() -> Option<PathBuf> {
+fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
     let dir = get_data_dir()?.join(OVERWRITE_SUBDIR);
-    verify_directory(&dir).ok()?;
-    Some(dir)
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
 fn get_active_profile() -> String {
@@ -243,10 +242,10 @@ fn get_active_profile() -> String {
     }
 }
 
-fn get_profiles_dir() -> Option<PathBuf> {
+fn get_profiles_dir() -> Result<PathBuf, &'static str> {
     let dir = get_data_dir()?.join(PROFILES_SUBDIR);
-    verify_directory(&dir).ok()?;
-    Some(dir)
+    verify_directory(&dir)?;
+    Ok(dir)
 }
 
 fn get_profile_dir(profile_name: &str) -> PathBuf {
@@ -300,8 +299,7 @@ fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
 
     let mut command = shell(format!(
         "squashfuse \"{}\" \"{}\"",
-        get_mod_dir(mod_name)
-            .ok_or("mod image not found")?
+        get_mod_dir(mod_name)?
             .to_string_lossy(),
         path.to_string_lossy()
     ));
@@ -467,13 +465,6 @@ fn main() {
 
     // Verify directories exist
     trace!("Verifying directories");
-    match get_data_dir() {
-        Some(dir) => info!("Data directory => {}", dir.display()),
-        None => {
-            error!("Could not find data dir!");
-            return;
-        }
-    }
 
     if let Err(e) = verify_directory(&get_data_dir().unwrap()) {
         error!("{}", e);
