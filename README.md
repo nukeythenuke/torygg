@@ -3,6 +3,11 @@ A mod manager for Skyrim Special Edition on linux
 
 WIP.
 
+Requires:
+- archivemount (archives are mounted, then a squashfs image is created from the mounted directory)
+- squashfuse (to mount squashfs images)
+- fuse-overlayfs (to mount mods on top of the Skyrim data directory)
+
 Uses SquashFS images to store installed mods, these images are then mounted in temporary directories. OverlayFS is then used to overlay the mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
 
 Todo:

@@ -33,10 +33,7 @@ fn verify_directory(path: &Path) -> Result<(), String> {
     }
 }
 
-fn install_mod_from_archive(
-    archive_path: &Path,
-    mod_name: &str,
-) -> Result<(), String> {
+fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), String> {
     if !archive_path.exists() {
         Err(format!(
             "Archive \"{}\" does not exist!",
@@ -50,7 +47,8 @@ fn install_mod_from_archive(
         let mut mount_archive = shell(format!(
             "archivemount \"{}\" \"{}\"",
             archive_path.to_string_lossy(),
-            archive_mount_path.to_string_lossy()));
+            archive_mount_path.to_string_lossy()
+        ));
 
         if let Err(e) = mount_archive.execute() {
             return Err(e.to_string());
@@ -60,7 +58,12 @@ fn install_mod_from_archive(
         // and move it if it is
         let entrys = archive_mount_path.read_dir().unwrap();
         if entrys.count() == 1 {
-            let entry = archive_mount_path.read_dir().unwrap().next().unwrap().unwrap();
+            let entry = archive_mount_path
+                .read_dir()
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap();
             let path = entry.path();
 
             if path.is_dir() {
@@ -71,7 +74,7 @@ fn install_mod_from_archive(
         let mut create_squashfs = shell(format!(
             "mksquashfs \"{}\" \"{}\"",
             archive_mount_path.to_string_lossy(),
-            get_mods_dir().unwrap().join(format!("{}", mod_name)).to_string_lossy()
+            get_mods_dir().unwrap().join(mod_name).to_string_lossy()
         ));
 
         if let Err(e) = create_squashfs.execute() {
@@ -332,15 +335,43 @@ fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), 
     Ok(())
 }
 
-fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), String> {
+fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
     if is_mod_installed(mod_name) && !is_mod_active(profile_name, mod_name) {
-        if let Err(e) = std::fs::write(get_profile_mods_dir(profile_name).join(mod_name), "") {
-            Err(e.to_string())
-        } else {
-            Ok(())
+        // Discover plugin files and store their names
+        let mut plugins = String::new();
+        let mod_dir = mount_mod(mod_name)?;
+
+        for entry in WalkDir::new(mod_dir).min_depth(1).max_depth(1) {
+            let entry = entry.map_err(|_| "Invalid entry")?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                continue;
+            }
+
+            if let Some(extension) = path.extension() {
+                let extension = extension
+                    .to_str()
+                    .ok_or("Can't convert extension to &str")?;
+                match extension {
+                    "esp" | "esm" | "esl" => {
+                        plugins.push_str(
+                            path.file_name()
+                                .ok_or("No file name")?
+                                .to_str()
+                                .ok_or("Can't convert extension to &str")?,
+                        );
+                        plugins.push('\n')
+                    }
+                    _ => (),
+                }
+            }
         }
+
+        std::fs::write(get_profile_mods_dir(profile_name).join(mod_name), plugins)
+            .map_err(|_| "Couldn't write to profile mods dir")
     } else {
-        Err("Mod not installed or is already active".to_owned())
+        Err("Mod not installed or is already active")
     }
 }
 
@@ -472,6 +503,25 @@ fn mount_directory(
     }
 }
 
+fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
+    let temp_dir = TempDir::new().map_err(|_| "Couldn't create temp dir")?;
+    let path = temp_dir.into_path();
+
+    let mut command = shell(format!(
+        "squashfuse \"{}\" \"{}\"",
+        get_mod_dir(mod_name)
+            .ok_or("mod image not found")?
+            .to_string_lossy(),
+        path.to_string_lossy()
+    ));
+
+    command
+        .execute()
+        .map_err(|_| "failed to mount mount directory")?;
+
+    Ok(path)
+}
+
 fn mount_skyrim_data_dir() -> Result<(), String> {
     let skyrim_data_dir = get_skyrim_data_dir().unwrap();
     let temp_dir = TempDir::new().unwrap();
@@ -480,7 +530,7 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
     for m in get_active_mods(&get_active_profile()).iter() {
         let squash_mount_dir = temp_dir.path().join(m);
         verify_directory(&squash_mount_dir).unwrap();
-        
+
         let mut mount_squashfs = shell(format!(
             "squashfuse \"{}\" \"{}\"",
             get_mod_dir(m).unwrap().to_string_lossy(),
@@ -490,7 +540,7 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
         if let Err(e) = mount_squashfs.execute() {
             return Err(e.to_string());
         }
-        
+
         lower_dirs.push(squash_mount_dir);
     }
 
