@@ -124,16 +124,14 @@ fn get_profiles() -> Result<Vec<String>, &'static str> {
     )
 }
 
-fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), String> {
-    let path = get_profiles_dir().unwrap().join(profile_name);
+fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), &'static str> {
+    let path = get_profiles_dir().ok_or("Couldn't get profiles dir")?.join(profile_name);
     if path.exists() {
-        return Err(format!("Profile \"{}\" already exists!", profile_name));
+        Err("Profile already exists!")
+    } else {
+        verify_directory(&path)?;
+        Ok(profiles.push(profile_name.to_owned()))
     }
-    verify_directory(path.as_path())?;
-
-    profiles.push(profile_name.to_owned());
-
-    Ok(())
 }
 
 fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
