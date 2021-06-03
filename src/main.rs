@@ -1,6 +1,6 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use execute::{shell, Execute};
-use log::{error, info, trace, warn};
+use log::{error, info, warn};
 use simplelog::TermLogger;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -430,8 +430,6 @@ fn main() {
     .unwrap();
 
     // Verify directories exist
-    trace!("Verifying directories");
-
     if let Err(e) = || -> Result<(), &'static str> {
         verify_directory(&get_data_dir()?)?;
         verify_directory(&get_mods_dir()?)?;
@@ -442,20 +440,23 @@ fn main() {
         return;
     }
 
-    let mut profiles = if let Ok(profiles) = get_profiles() {
-        profiles
-    } else {
-        return;
+    // Get profiles, create a default profile of none exist
+    let profiles  = match || -> Result<Vec<String>, &'static str> {
+        let mut profiles = get_profiles()?;
+        if profiles.is_empty() {
+            create_profile(&mut profiles, "Default")?;
+        }
+
+        Ok(profiles)
+    }() {
+        Ok(profiles) => profiles,
+        Err(e) => {
+            error!("{}", e);
+            return
+        }
     };
 
-    if profiles.is_empty() {
-        if let Err(e) = create_profile(&mut profiles, "Default") {
-            error!("{}", e);
-            return;
-        }
-    }
-
-    let profile = &mut profiles[0];
+    let profile = &profiles[0];
 
     if let Some(matches) = matches.subcommand_matches("install") {
         info!("Install.");
