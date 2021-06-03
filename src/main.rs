@@ -2,8 +2,8 @@ use clap::{crate_version, App, Arg, SubCommand};
 use execute::{shell, Execute};
 use log::{error, info, trace, warn};
 use simplelog::TermLogger;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -77,7 +77,7 @@ fn create_mod(mod_name: &str) -> Result<(), &'static str> {
 
 fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
     if is_mod_installed(mod_name)? {
-        for p in get_profiles() {
+        for p in get_profiles()? {
             deactivate_mod(&p, mod_name).ok();
         }
 
@@ -110,26 +110,18 @@ fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
     Ok(get_installed_mods()?.contains(&mod_name.to_owned()))
 }
 
-fn get_profiles() -> Vec<String> {
-    let mut profiles = Vec::<String>::new();
-    for p in WalkDir::new(get_profiles_dir().unwrap())
-        .min_depth(1)
-        .max_depth(1)
-    {
-        let path = match p {
-            Ok(p) => p.into_path(),
-            Err(_) => break,
-        };
-
-        if path.is_dir() {
-            if let Some(fs) = path.file_stem() {
-                info!("Found profile \"{:?}\"", fs);
-                profiles.push(fs.to_string_lossy().to_string());
-            }
-        }
-    }
-
-    profiles
+fn get_profiles() -> Result<Vec<String>, &'static str> {
+    Ok(
+        fs::read_dir(get_profiles_dir().ok_or("Could not get profiles dir")?)
+            .map_err(|_| "Could not read profiles dir")?
+            .filter_map(|e| Some(e.ok()?.path()))
+            .filter_map(|e| {
+                e.is_dir()
+                    .then(|| ())
+                    .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+            })
+            .collect(),
+    )
 }
 
 fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), String> {
@@ -513,7 +505,11 @@ fn main() {
         return;
     }
 
-    let mut profiles = get_profiles();
+    let mut profiles = if let Ok(profiles) = get_profiles() {
+        profiles
+    } else {
+        return;
+    };
 
     if profiles.is_empty() {
         if let Err(e) = create_profile(&mut profiles, "Default") {
@@ -605,7 +601,7 @@ fn main() {
         let mods = if let Ok(mods) = get_installed_mods() {
             mods
         } else {
-            return
+            return;
         };
 
         for m in mods {
