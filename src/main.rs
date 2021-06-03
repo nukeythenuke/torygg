@@ -233,10 +233,7 @@ fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
 }
 
 fn get_active_profile() -> String {
-    match std::env::var("TORYGG_PROFILE") {
-        Ok(p) => p,
-        Err(_) => String::from("Default"),
-    }
+    std::env::var("TORYGG_PROFILE").unwrap_or(String::from("Default"))
 }
 
 fn get_profiles_dir() -> Result<PathBuf, &'static str> {
