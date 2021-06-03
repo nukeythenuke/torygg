@@ -330,16 +330,13 @@ fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
     )
 }
 
-fn unmount_directory(dir: &Path) -> Result<(), String> {
+fn unmount_directory(dir: &Path) -> Result<(), &'static str> {
     let dir_string = format!("\"{}\"", dir.to_string_lossy());
 
     let mut command = shell(format!("umount {}", dir_string));
-    match command.execute().unwrap() {
-        Some(cmd_output) if cmd_output == 0 => Ok(()),
-        _ => Err(format!(
-            "Failed to umount overlayfs (maybe not mounted): {}",
-            dir.display()
-        )),
+    match command.execute().map_err(|_| "Failed to execute command")? {
+        Some(0) => Ok(()),
+        _ => Err("Failed to umount overlayfs")
     }
 }
 
