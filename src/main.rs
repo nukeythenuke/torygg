@@ -25,41 +25,34 @@ fn verify_directory(path: &Path) -> Result<(), &'static str> {
     }
 }
 
-fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), String> {
+fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &'static str> {
     if !archive_path.exists() {
-        Err(format!(
-            "Archive \"{}\" does not exist!",
-            archive_path.display()
-        ))
-    } else if get_installed_mods().contains(&mod_name.to_owned()) {
-        Err("Mod already exists!".to_owned())
+        Err("Archive does not exist!")
+    } else if is_mod_installed(mod_name) {
+        Err("Mod already exists!")
     } else {
         let archive_mount_dir = TempDir::new().unwrap();
-        let mut archive_mount_path = archive_mount_dir.path().to_path_buf();
+        let mut archive_mount_path = archive_mount_dir.into_path();
         let mut mount_archive = shell(format!(
             "archivemount \"{}\" \"{}\"",
             archive_path.to_string_lossy(),
             archive_mount_path.to_string_lossy()
         ));
 
-        if let Err(e) = mount_archive.execute() {
-            return Err(e.to_string());
-        }
+        mount_archive
+            .execute()
+            .map_err(|_| "Could not mount archive")?;
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
-        let entrys = archive_mount_path.read_dir().unwrap();
-        if entrys.count() == 1 {
-            let entry = archive_mount_path
-                .read_dir()
-                .unwrap()
-                .next()
-                .unwrap()
-                .unwrap();
-            let path = entry.path();
-
+        let entries = std::fs::read_dir(&archive_mount_path)
+            .map_err(|_| "Couldn't read dir")?
+            .filter_map(|e| e.ok())
+            .collect::<Vec<std::fs::DirEntry>>();
+        if entries.len() == 1 {
+            let path = entries[1].path();
             if path.is_dir() {
-                archive_mount_path = path;
+                archive_mount_path = path
             }
         }
 
@@ -69,11 +62,10 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), S
             get_mods_dir().unwrap().join(mod_name).to_string_lossy()
         ));
 
-        if let Err(e) = create_squashfs.execute() {
-            return Err(e.to_string());
-        }
-
-        Ok(())
+        create_squashfs
+            .execute()
+            .map_err(|_| "Could not create squashfs image")
+            .map(|_| ())
     }
 }
 
