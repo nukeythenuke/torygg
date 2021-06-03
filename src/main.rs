@@ -17,7 +17,9 @@ static PROFILES_SUBDIR: &str = "Profiles";
 
 fn verify_directory(path: &Path) -> Result<(), &'static str> {
     if path.exists() {
-        path.is_dir().then(|| ()).ok_or("path exists but is not a directory")
+        path.is_dir()
+            .then(|| ())
+            .ok_or("path exists but is not a directory")
     } else {
         fs::create_dir(path).map_err(|_| "Couldn't create directory")
     }
@@ -75,12 +77,11 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), S
     }
 }
 
-fn create_mod(mod_name: &str) -> Result<(), String> {
-    if !get_installed_mods().contains(&mod_name.to_owned()) {
-        verify_directory(&get_mods_dir().unwrap().join(mod_name))?;
-        Ok(())
+fn create_mod(mod_name: &str) -> Result<(), &'static str> {
+    if !is_mod_installed(mod_name) {
+        verify_directory(&get_mods_dir().unwrap().join(mod_name))
     } else {
-        Err("Mod with same name already exists!".to_owned())
+        Err("Mod with same name already exists!")
     }
 }
 
