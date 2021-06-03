@@ -7,8 +7,6 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
-mod extract;
-
 static APP_NAME: &str = "Torygg";
 
 static MODS_SUBDIR: &str = "Mods";
