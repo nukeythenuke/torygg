@@ -26,7 +26,7 @@ fn verify_directory(path: &Path) -> Result<(), &'static str> {
 fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &'static str> {
     if !archive_path.exists() {
         Err("Archive does not exist!")
-    } else if is_mod_installed(mod_name) {
+    } else if is_mod_installed(mod_name)? {
         Err("Mod already exists!")
     } else {
         let archive_mount_dir = TempDir::new().unwrap();
@@ -68,7 +68,7 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
 }
 
 fn create_mod(mod_name: &str) -> Result<(), &'static str> {
-    if !is_mod_installed(mod_name) {
+    if !is_mod_installed(mod_name)? {
         verify_directory(&get_mods_dir().unwrap().join(mod_name))
     } else {
         Err("Mod with same name already exists!")
@@ -76,7 +76,7 @@ fn create_mod(mod_name: &str) -> Result<(), &'static str> {
 }
 
 fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
-    if is_mod_installed(mod_name) {
+    if is_mod_installed(mod_name)? {
         for p in get_profiles() {
             deactivate_mod(&p, mod_name).ok();
         }
@@ -106,12 +106,8 @@ fn get_installed_mods() -> Result<Vec<String>, &'static str> {
     )
 }
 
-fn is_mod_installed(mod_name: &str) -> bool {
-    if let Ok(mods) = get_installed_mods() {
-        mods.contains(&mod_name.to_owned())
-    } else {
-        false
-    }
+fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
+    Ok(get_installed_mods()?.contains(&mod_name.to_owned()))
 }
 
 fn get_profiles() -> Vec<String> {
@@ -149,7 +145,7 @@ fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), 
 }
 
 fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
-    if is_mod_installed(mod_name) && !is_mod_active(profile_name, mod_name) {
+    if is_mod_installed(mod_name)? && !is_mod_active(profile_name, mod_name) {
         // Discover plugin files and store their names
         let mut plugins = String::new();
         let mod_dir = mount_mod(mod_name)?;
@@ -189,7 +185,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
 }
 
 fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), String> {
-    if is_mod_installed(mod_name) && is_mod_active(profile_name, mod_name) {
+    if is_mod_installed(mod_name)? && is_mod_active(profile_name, mod_name) {
         if let Err(e) = fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name)) {
             Err(e.to_string())
         } else {
