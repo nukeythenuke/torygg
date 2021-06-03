@@ -233,7 +233,7 @@ fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
 }
 
 fn get_active_profile() -> String {
-    std::env::var("TORYGG_PROFILE").unwrap_or(String::from("Default"))
+    std::env::var("TORYGG_PROFILE").unwrap_or_else(|_| String::from("Default"))
 }
 
 fn get_profiles_dir() -> Result<PathBuf, &'static str> {
@@ -536,38 +536,41 @@ fn main() {
 
     if let Some(_matches) = matches.subcommand_matches("mods") {
         println!("Mods");
-        let mods = if let Ok(mods) = get_installed_mods() {
-            mods
-        } else {
-            return;
+        let mods = match get_installed_mods() {
+            Ok(mods) => mods.into_iter(),
+            Err(e) => {
+                error!("{}", e);
+                return;
+            }
         };
 
-        for m in mods {
-            print!("{}", m);
-            println!("{}", {
-                if let Ok(mod_active) = is_mod_active(profile, &m) {
-                    if mod_active {
-                        "*"
-                    } else {
-                        ""
-                    }
+        let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
+            Ok(enabled) => {
+                if enabled {
+                    "*"
                 } else {
                     ""
                 }
-            });
+            }
+            Err(_) => "",
+        });
+
+        let combined = mods.zip(statuses);
+
+        for m in combined {
+            println!("{}{}", m.1, m.0)
         }
+
         return;
     }
 
     if let Some(_matches) = matches.subcommand_matches("mount") {
         info!("Mount.");
 
-        if let Err(e) = mount_skyrim_data_dir() {
-            error!("{}", e);
-            return;
-        }
-
-        if let Err(e) = mount_skyrim_configs_dir() {
+        if let Err(e) = || -> Result<(), &'static str> {
+            mount_skyrim_data_dir()?;
+            mount_skyrim_configs_dir()
+        }() {
             error!("{}", e);
             return;
         }
