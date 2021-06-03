@@ -2,8 +2,8 @@ use clap::{crate_version, App, Arg, SubCommand};
 use execute::{shell, Execute};
 use log::{error, info, trace, warn};
 use simplelog::TermLogger;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::fs;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -43,10 +43,10 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
-        let entries = std::fs::read_dir(&archive_mount_path)
+        let entries = fs::read_dir(&archive_mount_path)
             .map_err(|_| "Couldn't read dir")?
             .filter_map(|e| e.ok())
-            .collect::<Vec<std::fs::DirEntry>>();
+            .collect::<Vec<fs::DirEntry>>();
         if entries.len() == 1 {
             let path = entries[1].path();
             if path.is_dir() {
@@ -81,7 +81,7 @@ fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
             deactivate_mod(&p, mod_name).ok();
         }
 
-        std::fs::remove_file(get_mod_dir(mod_name).unwrap()).map_err(|_| "Failed to remove file")
+        fs::remove_file(get_mod_dir(mod_name).unwrap()).map_err(|_| "Failed to remove file")
     } else {
         Err("Mod not installed")
     }
@@ -92,26 +92,26 @@ fn get_mod_dir(mod_name: &str) -> Option<PathBuf> {
     dir.exists().then(|| dir)
 }
 
-fn get_installed_mods() -> Vec<String> {
-    let mut mods = Vec::<String>::new();
-    for m in WalkDir::new(get_mods_dir().unwrap().as_path())
-        .min_depth(1)
-        .max_depth(1)
-    {
-        let m = m.unwrap();
-        let path = m.path();
-        if !path.is_dir() {
-            if let Some(fs) = path.file_stem() {
-                mods.push(fs.to_string_lossy().to_string());
-            }
-        }
-    }
-
-    mods
+fn get_installed_mods() -> Result<Vec<String>, &'static str> {
+    Ok(
+        fs::read_dir(get_mods_dir().ok_or("Could not get mods dir")?)
+            .map_err(|_| "Could not read mods dir")?
+            .filter_map(|e| e.ok().and_then(|e| Some(e.path())))
+            .filter_map(|e| {
+                (!e.is_dir())
+                    .then(|| ())
+                    .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+            })
+            .collect(),
+    )
 }
 
 fn is_mod_installed(mod_name: &str) -> bool {
-    get_installed_mods().contains(&mod_name.to_owned())
+    if let Ok(mods) = get_installed_mods() {
+        mods.contains(&mod_name.to_owned())
+    } else {
+        false
+    }
 }
 
 fn get_profiles() -> Vec<String> {
@@ -181,7 +181,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
             }
         }
 
-        std::fs::write(get_profile_mods_dir(profile_name).join(mod_name), plugins)
+        fs::write(get_profile_mods_dir(profile_name).join(mod_name), plugins)
             .map_err(|_| "Couldn't write to profile mods dir")
     } else {
         Err("Mod not installed or is already active")
@@ -190,7 +190,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
 
 fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), String> {
     if is_mod_installed(mod_name) && is_mod_active(profile_name, mod_name) {
-        if let Err(e) = std::fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name)) {
+        if let Err(e) = fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name)) {
             Err(e.to_string())
         } else {
             Ok(())
@@ -606,9 +606,15 @@ fn main() {
 
     if let Some(_matches) = matches.subcommand_matches("mods") {
         println!("Mods");
-        for m in &get_installed_mods() {
+        let mods = if let Ok(mods) = get_installed_mods() {
+            mods
+        } else {
+            return
+        };
+
+        for m in mods {
             print!("{}", m);
-            println!("{}", if is_mod_active(profile, m) { "*" } else { "" });
+            println!("{}", if is_mod_active(profile, &m) { "*" } else { "" });
         }
         return;
     }
