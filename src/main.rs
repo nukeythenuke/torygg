@@ -93,17 +93,15 @@ fn get_mod_dir(mod_name: &str) -> Result<PathBuf, &'static str> {
 }
 
 fn get_installed_mods() -> Result<Vec<String>, &'static str> {
-    Ok(
-        fs::read_dir(get_mods_dir()?)
-            .map_err(|_| "Could not read mods dir")?
-            .filter_map(|e| Some(e.ok()?.path()))
-            .filter_map(|e| {
-                (!e.is_dir())
-                    .then(|| ())
-                    .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
-            })
-            .collect(),
-    )
+    Ok(fs::read_dir(get_mods_dir()?)
+        .map_err(|_| "Could not read mods dir")?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter_map(|e| {
+            (!e.is_dir())
+                .then(|| ())
+                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+        })
+        .collect())
 }
 
 fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
@@ -111,22 +109,19 @@ fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
 }
 
 fn get_profiles() -> Result<Vec<String>, &'static str> {
-    Ok(
-        fs::read_dir(get_profiles_dir()?)
-            .map_err(|_| "Could not read profiles dir")?
-            .filter_map(|e| Some(e.ok()?.path()))
-            .filter_map(|e| {
-                e.is_dir()
-                    .then(|| ())
-                    .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
-            })
-            .collect(),
-    )
+    Ok(fs::read_dir(get_profiles_dir()?)
+        .map_err(|_| "Could not read profiles dir")?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter_map(|e| {
+            e.is_dir()
+                .then(|| ())
+                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+        })
+        .collect())
 }
 
 fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), &'static str> {
-    let path = get_profiles_dir()?
-        .join(profile_name);
+    let path = get_profiles_dir()?.join(profile_name);
     if path.exists() {
         Err("Profile already exists!")
     } else {
@@ -209,7 +204,7 @@ fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
 fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
     Ok(PathBuf::from(
         std::env::var_os("TORYGG_USER_DIRECTORY")
-            .ok_or("Environment variable 'TORYGG_USER_DIRECTORY' is not set!")?
+            .ok_or("Environment variable 'TORYGG_USER_DIRECTORY' is not set!")?,
     ))
 }
 
@@ -218,7 +213,9 @@ fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
 }
 
 fn get_data_dir() -> Result<PathBuf, &'static str> {
-    let dir = dirs::data_dir().ok_or("Could not find torygg's data dir")?.join(APP_NAME);
+    let dir = dirs::data_dir()
+        .ok_or("Could not find torygg's data dir")?
+        .join(APP_NAME);
     verify_directory(&dir)?;
     Ok(dir)
 }
@@ -299,8 +296,7 @@ fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
 
     let mut command = shell(format!(
         "squashfuse \"{}\" \"{}\"",
-        get_mod_dir(mod_name)?
-            .to_string_lossy(),
+        get_mod_dir(mod_name)?.to_string_lossy(),
         path.to_string_lossy()
     ));
 
