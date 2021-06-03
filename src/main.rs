@@ -196,14 +196,15 @@ fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'static st
     Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
-fn get_skyrim_install_dir() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os(
-        "TORYGG_SKYRIM_INSTALL_DIRECTORY",
-    )?))
+fn get_skyrim_install_dir() -> Result<PathBuf, &'static str> {
+    Ok(PathBuf::from(
+        std::env::var_os("TORYGG_SKYRIM_INSTALL_DIRECTORY")
+            .ok_or("Environment variable 'TORYGG_SKYRIM_INSTALL_DIRECTORY' is not set!")?,
+    ))
 }
 
-fn get_skyrim_data_dir() -> Option<PathBuf> {
-    Some(get_skyrim_install_dir()?.join("Data"))
+fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
+    Ok(get_skyrim_install_dir()?.join("Data"))
 }
 
 fn get_wine_user_dir() -> Option<PathBuf> {
