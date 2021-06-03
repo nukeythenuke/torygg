@@ -140,7 +140,7 @@ fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), 
 fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
     if !is_mod_installed(mod_name)? {
         Err("Mod not installed")
-    } else if is_mod_active(profile_name, mod_name) {
+    } else if is_mod_active(profile_name, mod_name)? {
         Err("Mod already active")
     } else {
         // Discover plugins
@@ -172,7 +172,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
 fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
     if !is_mod_installed(mod_name)? {
         Err("Mod not installed")
-    } else if !is_mod_active(profile_name, mod_name) {
+    } else if !is_mod_active(profile_name, mod_name)? {
         Err("Mod is not active")
     } else {
         fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name))
@@ -180,26 +180,20 @@ fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str
     }
 }
 
-fn get_active_mods(profile_name: &str) -> Vec<String> {
-    let mut mods = Vec::<String>::new();
-    for e in WalkDir::new(get_profile_mods_dir(profile_name))
-        .min_depth(1)
-        .max_depth(1)
-    {
-        let e = e.unwrap();
-        let path = e.path();
-        if path.is_dir() {
-            continue;
-        }
-        if let Some(fs) = path.file_stem() {
-            mods.push(fs.to_string_lossy().to_string());
-        }
-    }
-    mods
+fn get_active_mods(profile_name: &str) -> Result<Vec<String>, &'static str> {
+    Ok(fs::read_dir(get_profile_mods_dir(profile_name))
+        .map_err(|_| "Could not read dir")?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter_map(|e| {
+            (!e.is_dir())
+                .then(|| ())
+                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+        })
+        .collect::<Vec<String>>())
 }
 
-fn is_mod_active(profile_name: &str, mod_name: &str) -> bool {
-    get_active_mods(profile_name).contains(&mod_name.to_owned())
+fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'static str> {
+    Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
 fn get_skyrim_install_dir() -> Option<PathBuf> {
@@ -320,7 +314,7 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
     let temp_dir = TempDir::new().unwrap();
 
     let mut lower_dirs = Vec::<PathBuf>::new();
-    for m in get_active_mods(&get_active_profile()).iter() {
+    for m in get_active_mods(&get_active_profile())?.iter() {
         let squash_mount_dir = temp_dir.path().join(m);
         verify_directory(&squash_mount_dir).unwrap();
 
@@ -598,7 +592,17 @@ fn main() {
 
         for m in mods {
             print!("{}", m);
-            println!("{}", if is_mod_active(profile, &m) { "*" } else { "" });
+            println!("{}", {
+                if let Ok(mod_active) = is_mod_active(profile, &m) {
+                    if mod_active {
+                        "*"
+                    } else {
+                        ""
+                    }
+                } else {
+                    ""
+                }
+            });
         }
         return;
     }
