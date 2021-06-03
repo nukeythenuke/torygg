@@ -207,12 +207,15 @@ fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
     Ok(get_skyrim_install_dir()?.join("Data"))
 }
 
-fn get_wine_user_dir() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("TORYGG_USER_DIRECTORY")?))
+fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
+    Ok(PathBuf::from(
+        std::env::var_os("TORYGG_USER_DIRECTORY")
+            .ok_or("Environment variable 'TORYGG_USER_DIRECTORY' is not set!")?
+    ))
 }
 
-fn get_skyrim_config_dir() -> Option<PathBuf> {
-    Some(get_wine_user_dir()?.join("My Documents/My Games/Skyrim Special Edition"))
+fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
+    Ok(get_wine_user_dir()?.join("My Documents/My Games/Skyrim Special Edition"))
 }
 
 fn get_data_dir() -> Option<PathBuf> {
@@ -345,7 +348,7 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
 }
 
 fn mount_skyrim_configs_dir() -> Result<(), String> {
-    let skyrim_configs_dir = get_skyrim_config_dir().ok_or("Could not find skyrim config dir")?;
+    let skyrim_configs_dir = get_skyrim_config_dir()?;
 
     let override_config_dir = get_data_dir().unwrap().join("Configs");
     verify_directory(&override_config_dir)?;
