@@ -441,7 +441,7 @@ fn main() {
     }
 
     // Get profiles, create a default profile of none exist
-    let profiles  = match || -> Result<Vec<String>, &'static str> {
+    let profiles = match || -> Result<Vec<String>, &'static str> {
         let mut profiles = get_profiles()?;
         if profiles.is_empty() {
             create_profile(&mut profiles, "Default")?;
@@ -452,7 +452,7 @@ fn main() {
         Ok(profiles) => profiles,
         Err(e) => {
             error!("{}", e);
-            return
+            return;
         }
     };
 
