@@ -260,30 +260,21 @@ fn mount_directory(
     upper_dir: &Path,
     work_dir: &Path,
     mount_dir: &Path,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     let mut lower_dirs_string = String::from('\"');
-    let joined_paths = match std::env::join_paths(lower_dirs) {
-        Ok(s) => s,
-        Err(e) => return Err(e.to_string()),
-    };
+    let joined_paths = std::env::join_paths(lower_dirs).map_err(|_| "Could not join paths")?;
     lower_dirs_string.push_str(&joined_paths.to_string_lossy());
     lower_dirs_string.push('\"');
 
-    let upper_dir_string = format!("\"{}\"", upper_dir.to_string_lossy());
-    let work_dir_string = format!("\"{}\"", work_dir.to_string_lossy());
-    let mount_dir_string = format!("\"{}\"", mount_dir.to_string_lossy());
-
     let mut command = shell(format!(
-        "fuse-overlayfs -o lowerdir={},upperdir={},workdir={} {}",
-        lower_dirs_string, upper_dir_string, work_dir_string, mount_dir_string,
+        "fuse-overlayfs -o lowerdir={},upperdir={:?},workdir={:?} {:?}",
+        lower_dirs_string, upper_dir, work_dir, mount_dir,
     ));
 
-    match command.execute().unwrap() {
-        Some(cmd_output) if cmd_output == 0 => Ok(()),
-        _ => Err(format!(
-            "Failed to mount overlayfs (maybe already mounted): {}",
-            mount_dir.display()
-        )),
+    if command.execute().map_err(|_| "Failed to execute command")? == Some(0) {
+        Ok(())
+    } else {
+        Err("Failed to mount overlayfs")
     }
 }
 
@@ -304,7 +295,7 @@ fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
     Ok(path)
 }
 
-fn mount_skyrim_data_dir() -> Result<(), String> {
+fn mount_skyrim_data_dir() -> Result<(), &'static str> {
     let skyrim_data_dir = get_skyrim_data_dir().unwrap();
     let temp_dir = TempDir::new().unwrap();
 
@@ -319,9 +310,9 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
             squash_mount_dir.to_string_lossy()
         ));
 
-        if let Err(e) = mount_squashfs.execute() {
-            return Err(e.to_string());
-        }
+        mount_squashfs
+            .execute()
+            .map_err(|_| "Failed to execute command")?;
 
         lower_dirs.push(squash_mount_dir);
     }
@@ -338,7 +329,7 @@ fn mount_skyrim_data_dir() -> Result<(), String> {
     mount_directory(&lower_dirs, &upper_dir, &work_dir, &skyrim_data_dir)
 }
 
-fn mount_skyrim_configs_dir() -> Result<(), String> {
+fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
     let skyrim_configs_dir = get_skyrim_config_dir()?;
 
     let override_config_dir = get_data_dir().unwrap().join("Configs");
