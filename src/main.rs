@@ -85,19 +85,15 @@ fn create_mod(mod_name: &str) -> Result<(), &'static str> {
     }
 }
 
-fn uninstall_mod(mod_name: &str) -> Result<(), String> {
-    if get_installed_mods().contains(&mod_name.to_owned()) {
+fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
+    if is_mod_installed(mod_name) {
         for p in get_profiles() {
-            if deactivate_mod(&p, mod_name).is_err() {};
+            deactivate_mod(&p, mod_name).ok();
         }
 
-        if let Err(e) = std::fs::remove_file(get_mod_dir(mod_name).unwrap()) {
-            Err(e.to_string())
-        } else {
-            Ok(())
-        }
+        std::fs::remove_file(get_mod_dir(mod_name).unwrap()).map_err(|_| "Failed to remove file")
     } else {
-        Err("Mod not installed".to_owned())
+        Err("Mod not installed")
     }
 }
 
