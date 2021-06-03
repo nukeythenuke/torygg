@@ -279,13 +279,14 @@ fn mount_directory(
 }
 
 fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
-    let temp_dir = TempDir::new().map_err(|_| "Couldn't create temp dir")?;
-    let path = temp_dir.into_path();
+    let path = TempDir::new()
+        .map_err(|_| "Couldn't create temp dir")?
+        .into_path();
 
     let mut command = shell(format!(
         "squashfuse \"{}\" \"{}\"",
-        get_mod_dir(mod_name)?.to_string_lossy(),
-        path.to_string_lossy()
+        get_mod_dir(mod_name)?.display(),
+        path.display()
     ));
 
     command
