@@ -15,21 +15,11 @@ static MODS_SUBDIR: &str = "Mods";
 static OVERWRITE_SUBDIR: &str = "Overwrite";
 static PROFILES_SUBDIR: &str = "Profiles";
 
-fn verify_directory(path: &Path) -> Result<(), String> {
+fn verify_directory(path: &Path) -> Result<(), &'static str> {
     if path.exists() {
-        if path.is_dir() {
-            Ok(())
-        } else {
-            Err(format!("{} exists but is not a directory!", path.display()))
-        }
+        path.is_dir().then(|| ()).ok_or("path exists but is not a directory")
     } else {
-        match fs::create_dir(path) {
-            Ok(_) => {
-                info!("Created directory => {}", path.display());
-                Ok(())
-            }
-            Err(e) => Err(e.to_string()),
-        }
+        fs::create_dir(path).map_err(|_| "Couldn't create directory")
     }
 }
 
