@@ -169,15 +169,14 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
     }
 }
 
-fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), String> {
-    if is_mod_installed(mod_name)? && is_mod_active(profile_name, mod_name) {
-        if let Err(e) = fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name)) {
-            Err(e.to_string())
-        } else {
-            Ok(())
-        }
+fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
+    if !is_mod_installed(mod_name)? {
+        Err("Mod not installed")
+    } else if !is_mod_active(profile_name, mod_name) {
+        Err("Mod is not active")
     } else {
-        Err("Mod not installed or is already inactive".to_owned())
+        fs::remove_file(get_profile_mods_dir(profile_name).join(mod_name))
+            .map_err(|_| "Failed to remove mod file")
     }
 }
 
