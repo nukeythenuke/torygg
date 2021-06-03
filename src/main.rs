@@ -89,12 +89,7 @@ fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
 
 fn get_mod_dir(mod_name: &str) -> Option<PathBuf> {
     let dir = get_mods_dir()?.join(mod_name);
-
-    if dir.exists() {
-        Some(dir)
-    } else {
-        None
-    }
+    dir.exists().then(|| dir)
 }
 
 fn get_installed_mods() -> Vec<String> {
