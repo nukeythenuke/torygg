@@ -155,11 +155,30 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
                     .then(|| ())
                     .and_then(|_| Some(e.file_name()?.to_str()?.to_owned()))
             })
-            .collect::<Vec<String>>()
-            .join("\n");
+            .collect::<Vec<String>>();
 
-        fs::write(get_profile_mods_dir(profile_name)?.join(mod_name), plugins)
-            .map_err(|_| "Failed to write to profile's mods dir")
+        fs::write(get_profile_mods_dir(profile_name)?.join(mod_name), plugins.join("\n"))
+            .map_err(|_| "Failed to write to profile's mods dir")?;
+
+        let plugins_path = get_profile_appdata_dir(profile_name)?.join("Plugins.txt");
+        let plugins_string = if plugins_path.exists() {
+            fs::read_to_string(&plugins_path).map_err(|_| "Could not read Plugins.txt")?
+        } else {
+            "".to_owned()
+        };
+
+        let mut plugins_vec = if plugins_string.is_empty() {
+            Vec::new()
+        } else {
+            plugins_string.split('\n').map(|s| s.to_owned()).collect()
+        };
+
+        for plugin in plugins {
+            plugins_vec.push(format!("*{}", plugin));
+        }
+
+        fs::write(plugins_path, plugins_vec.join("\n"))
+            .map_err(|e| { error!("{}", e.to_string()); "Failed to write Plugins.txt" })
     }
 }
 
@@ -169,8 +188,43 @@ fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str
     } else if !is_mod_active(profile_name, mod_name)? {
         Err("Mod is not active")
     } else {
+        let plugins_path = get_profile_appdata_dir(profile_name)?.join("Plugins.txt");
+        let plugins_string = if plugins_path.exists() {
+            fs::read_to_string(&plugins_path).map_err(|_| "Could not read Plugins.txt")?
+        } else {
+            "".to_owned()
+        };
+
+        let mut plugins_vec = if plugins_string.is_empty() {
+            Vec::new()
+        } else {
+            plugins_string.split('\n').map(|s| s.to_owned()).collect()
+        };
+
+        let mod_plugins_string = fs::read_to_string(get_profile_mods_dir(profile_name)?.join(mod_name))
+            .map_err(|_| "Failed to read mod plugins")?;
+
+        let mod_plugins_vec = if plugins_string.is_empty() {
+            Vec::new()
+        } else {
+            mod_plugins_string.split('\n').map(|s| s.to_owned()).collect()
+        };
+
+        let mod_plugins_vec_active = mod_plugins_vec.iter().map(|s| format!("*{}", s)).collect::<Vec<String>>();
+
+        for i in 0..plugins_vec.len() {
+            if mod_plugins_vec.contains(&plugins_vec[i]) {
+                plugins_vec.remove(i);
+            }
+            if mod_plugins_vec_active.contains(&plugins_vec[i]) {
+                plugins_vec.remove(i);
+            }
+        }
+
         fs::remove_file(get_profile_mods_dir(profile_name)?.join(mod_name))
-            .map_err(|_| "Failed to remove mod file")
+            .map_err(|_| "Failed to remove mod file")?;
+        fs::write(plugins_path, plugins_vec.join("\n"))
+            .map_err(|e| { error!("{}", e.to_string()); "Failed to write Plugins.txt" })
     }
 }
 
@@ -212,6 +266,11 @@ fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
     Ok(get_wine_user_dir()?.join("My Documents/My Games/Skyrim Special Edition"))
 }
 
+// Folder where profile Plugins.txt is kept
+fn get_skyrim_appdata_dir() -> Result<PathBuf, &'static str> {
+    Ok(get_wine_user_dir()?.join("Local Settings/Application Data/Skyrim Special Edition"))
+}
+
 fn get_data_dir() -> Result<PathBuf, &'static str> {
     let dir = dirs::data_dir()
         .ok_or("Could not find torygg's data dir")?
@@ -250,6 +309,12 @@ fn get_profile_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
 
 fn get_profile_mods_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
     let dir = get_profile_dir(&profile_name)?.join("Mods");
+    verify_directory(&dir)?;
+    Ok(dir)
+}
+
+fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
+    let dir = get_profile_dir(profile_name)?.join("AppData");
     verify_directory(&dir)?;
     Ok(dir)
 }
@@ -305,10 +370,10 @@ fn mount_skyrim_data_dir() -> Result<(), &'static str> {
         .collect::<Vec<PathBuf>>();
     lower_dirs.push(skyrim_data_dir.clone());
 
-    let upper_dir = get_overwrite_dir().unwrap();
+    let upper_dir = get_overwrite_dir()?;
     verify_directory(&upper_dir)?;
 
-    let work_dir = get_data_dir().unwrap().join(".OverlayFS");
+    let work_dir = get_data_dir()?.join(".OverlayFS");
     verify_directory(&work_dir)?;
 
     mount_directory(&lower_dirs, &upper_dir, &work_dir, &skyrim_data_dir)
@@ -317,10 +382,10 @@ fn mount_skyrim_data_dir() -> Result<(), &'static str> {
 fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
     let skyrim_configs_dir = get_skyrim_config_dir()?;
 
-    let override_config_dir = get_data_dir().unwrap().join("Configs");
+    let override_config_dir = get_data_dir()?.join("Configs");
     verify_directory(&override_config_dir)?;
 
-    let work_dir = get_data_dir().unwrap().join(".OverlayFS");
+    let work_dir = get_data_dir()?.join(".OverlayFS");
     verify_directory(&work_dir)?;
 
     mount_directory(
@@ -328,6 +393,22 @@ fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
         &override_config_dir,
         &work_dir,
         &skyrim_configs_dir,
+    )
+}
+
+fn mount_skyrim_appdata_dir() -> Result<(), &'static str> {
+    let skyrim_appdata_dir = get_skyrim_appdata_dir()?;
+
+    let override_appdata_dir = get_profile_appdata_dir(&get_active_profile())?;
+
+    let work_dir = get_data_dir()?.join(".OverlayFS");
+    verify_directory(&work_dir)?;
+
+    mount_directory(
+        &[skyrim_appdata_dir.clone()],
+        &override_appdata_dir,
+        &work_dir,
+        &skyrim_appdata_dir,
     )
 }
 
@@ -569,7 +650,8 @@ fn main() {
 
         if let Err(e) = || -> Result<(), &'static str> {
             mount_skyrim_data_dir()?;
-            mount_skyrim_configs_dir()
+            mount_skyrim_configs_dir()?;
+            mount_skyrim_appdata_dir()
         }() {
             error!("{}", e);
             return;
@@ -586,6 +668,10 @@ fn main() {
         }
 
         if let Err(e) = unmount_directory(&get_skyrim_config_dir().unwrap()) {
+            warn!("{}", e);
+        }
+
+        if let Err(e) = unmount_directory(&get_skyrim_appdata_dir().unwrap()) {
             warn!("{}", e);
         }
 
