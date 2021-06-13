@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
-static APP_NAME: &str = "Torygg";
+static APP_NAME: &str = "torygg";
 
 static MODS_SUBDIR: &str = "Mods";
 static OVERWRITE_SUBDIR: &str = "Overwrite";
