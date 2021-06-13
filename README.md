@@ -17,9 +17,9 @@ torygg install <path/to/mod_archive> <desired_mod_name> # Install a mod
 torygg activate <mod_name>  # Activate a mod  
 torygg mount  # Mount the mod overlayfs over the skyrim data directory
 ```  
-Now launch Skyrim through Steam.
-Skyrim (I think) will detect all plugins and fill the plugins.txt.
-You will then need to then add a `*` beside each entry in the plugins.txt file and modify the load order to suit.  
+Now launch Skyrim as you normally would through Steam.
+
+Some other commands:
 ```bash
 torygg umount  # Unmount the overlayfs  
 torygg help  # List of commands
@@ -30,9 +30,11 @@ torygg help  # List of commands
 Uses SquashFS images to store installed mods, these images are then mounted in temporary directories. OverlayFS is then used to overlay the mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
 
 Todo:
-- Currently doesn't modify the plugins.txt, so that has to be done manually.
-- Manipulation of the load order
-- Other things that I can't think of
+- Find the Skyrim install directory automatically
+- Lauch Skyrim not through Steam incase Steam wants to update it which might break mods.
+- Now modifies the Plugins.txt, however the implementation is dumb and needs improved.
+- Manipulation of the load order.
+- Other things that I can't think of.
 
 This is pretty much my first rust project so it is likely a mess, any pointers will be much appreciated.
 Contributions and thoughts are welcome.
