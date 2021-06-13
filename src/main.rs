@@ -48,7 +48,7 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
             .filter_map(|e| e.ok())
             .collect::<Vec<fs::DirEntry>>();
         if entries.len() == 1 {
-            let path = entries[1].path();
+            let path = entries[0].path();
             if path.is_dir() {
                 archive_mount_path = path
             }
