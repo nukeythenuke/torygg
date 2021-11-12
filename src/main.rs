@@ -5,7 +5,6 @@ use simplelog::TermLogger;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::ExitStatus;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -108,14 +107,17 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
         let archive_mount_dir = TempDir::new().unwrap();
         let mut archive_mount_path = archive_mount_dir.into_path();
         let mut mount_archive = shell(format!(
-            "archivemount \"{}\" \"{}\"",
+            "archivefs \"{}\" \"{}\"",
             archive_path.to_string_lossy(),
             archive_mount_path.to_string_lossy()
         ));
 
-        mount_archive
-            .execute()
-            .map_err(|_| "Could not mount archive")?;
+        let status = mount_archive
+            .status()
+            .map_err(|_| "Unable to mount archive")?;
+        if !status.success() {
+            return Err("Unable to mount archive");
+        }
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
@@ -131,15 +133,17 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
         }
 
         let mut create_squashfs = shell(format!(
-            "mksquashfs \"{}\" \"{}\"",
+            "mksquashfs \"{}\" \"{}\" -comp zstd -quiet",
             archive_mount_path.to_string_lossy(),
             get_mods_dir().unwrap().join(mod_name).to_string_lossy()
         ));
 
-        create_squashfs
-            .execute()
-            .map_err(|_| "Could not create squashfs image")
-            .map(|_| ())
+        let status = create_squashfs.status().map_err(|_| "")?;
+        if !status.success() {
+            return Err("Could not create squashfs image");
+        }
+
+        Ok(())
     }
 }
 

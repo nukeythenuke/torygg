@@ -4,7 +4,7 @@ A mod manager for Skyrim Special Edition on linux
 WIP.
 
 Requires:
-- [archivemount](https://github.com/cybernoid/archivemount) (archives are mounted, then a squashfs image is created from the mounted directory)
+- [archivefs](https://github.com/bugnano/archivefs) (archives are mounted, then a squashfs image is created from the mounted directory)
 - [squashfuse](https://github.com/vasi/squashfuse) (to mount squashfs images)
 - [fuse-overlayfs](https://github.com/containers/fuse-overlayfs) (to mount mods on top of the Skyrim data directory)
 
