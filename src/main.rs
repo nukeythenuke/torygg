@@ -40,12 +40,12 @@ mod util {
     pub fn get_libraryfolders_vdf() -> PathBuf {
         PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
     }
-    
+
     fn get_steam_library(app: apps::SteamApp) -> Option<PathBuf> {
         let vdf = get_libraryfolders_vdf();
         let mut file = File::open(vdf).ok()?;
         let kvs = torygg_vdf::parse(&mut file).ok()?;
-    
+
         for kv in &kvs {
             let components = kv.0.iter().collect::<Vec<_>>();
             // Key we want:                    🠗
@@ -54,33 +54,33 @@ mod util {
                 if *component == app.appid.to_string().as_str() {
                     // libraryfolders/<lib_id>/path
                     let path = PathBuf::from_iter(kv.0.iter().take(2)).join("path");
-    
+
                     return Some(kvs[&path].clone().into());
                 }
             }
         }
-    
+
         None
     }
-    
+
     pub fn get_install_dir(app: apps::SteamApp) -> Option<PathBuf> {
         let path = get_steam_library(app)?
             .join("steamapps/common")
             .join(app.install_dir);
-    
+
         if path.exists() {
             Some(path)
         } else {
             None
         }
     }
-    
+
     pub fn get_wine_prefix(app: apps::SteamApp) -> Option<PathBuf> {
         let path = get_steam_library(app)?
             .join("steamapps/compatdata")
             .join(app.appid.to_string())
             .join("pfx");
-    
+
         if path.exists() {
             Some(path)
         } else {
@@ -344,9 +344,8 @@ fn get_skyrim_install_dir() -> Result<PathBuf, &'static str> {
                 Err("specified path does not exist")
             }
         }
-        None => {
-            util::get_install_dir(util::apps::SKYRIM_SPECIAL_EDITION).ok_or("skyrim install dir not found")
-        }
+        None => util::get_install_dir(util::apps::SKYRIM_SPECIAL_EDITION)
+            .ok_or("skyrim install dir not found"),
     }
 }
 
@@ -366,13 +365,15 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
         }
         None => {
             let err = Err("wine user dir not found");
-            let mut path = util::get_wine_prefix(util::apps::SKYRIM_SPECIAL_EDITION).ok_or("skyrim install dir not found")?;
+            let mut path = util::get_wine_prefix(util::apps::SKYRIM_SPECIAL_EDITION)
+                .ok_or("skyrim install dir not found")?;
             path.push("drive_c/users");
             let steamuser = path.join("steamuser");
             if steamuser.exists() {
                 Ok(steamuser)
             } else {
-                if let Some(current_user) = std::env::vars().collect::<HashMap<_, _>>().get("USER") {
+                if let Some(current_user) = std::env::vars().collect::<HashMap<_, _>>().get("USER")
+                {
                     let user_dir = path.join(current_user);
                     if user_dir.exists() {
                         Ok(user_dir)
@@ -634,7 +635,7 @@ fn main() {
         },
         simplelog::Config::default(),
         simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto
+        simplelog::ColorChoice::Auto,
     )
     .unwrap();
 

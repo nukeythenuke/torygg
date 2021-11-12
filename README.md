@@ -30,6 +30,7 @@ Todo:
 - Launch Skyrim not through Steam incase Steam wants to update it which might break mods.
 - Now modifies the Plugins.txt, however the implementation is dumb and needs improved.
 - Manipulation of the load order.
+- FOMODS?
 - Other things that I can't think of.
 
 This is pretty much my first rust project so it is likely a mess, any pointers will be much appreciated.
