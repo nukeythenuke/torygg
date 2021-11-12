@@ -7,14 +7,16 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+torygg-vdf = { git = "https://github.com/nukeythenuke/torygg-vdf" }
+
 clap = "2.33.3"
-dirs = "3.0.1"
+dirs = "4.0.0"
 execute = "0.2.8"
-infer = "0.3.4"
+infer = "0.5.0"
 lazy_static = "1.4.0"
 log = "0.4.13"
 memmap = "0.7.0"
-simplelog = "0.9.0"
+simplelog = "0.10.2"
 tempfile = "3.2.0"
 walkdir = "2.3.1"
 yaml-rust = "0.4.5"

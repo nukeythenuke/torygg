@@ -2,8 +2,10 @@ use clap::{crate_version, App, Arg, SubCommand};
 use execute::{shell, Execute};
 use log::{error, info, warn};
 use simplelog::TermLogger;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::ExitStatus;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -12,6 +14,80 @@ static APP_NAME: &str = "torygg";
 static MODS_SUBDIR: &str = "Mods";
 static OVERWRITE_SUBDIR: &str = "Overwrite";
 static PROFILES_SUBDIR: &str = "Profiles";
+
+mod util {
+    use std::{fs::File, iter::FromIterator, path::PathBuf};
+
+    pub mod apps {
+        /// appid: Steam app id
+        /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
+        #[derive(Debug, Clone, Copy)]
+        pub struct SteamApp {
+            pub appid: isize,
+            pub install_dir: &'static str,
+        }
+
+        pub const SKYRIM: SteamApp = SteamApp {
+            appid: 72850,
+            install_dir: "Skyrim",
+        };
+        pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
+            appid: 489830,
+            install_dir: "Skyrim Special Edition",
+        };
+    }
+
+    pub fn get_libraryfolders_vdf() -> PathBuf {
+        PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
+    }
+    
+    fn get_steam_library(app: apps::SteamApp) -> Option<PathBuf> {
+        let vdf = get_libraryfolders_vdf();
+        let mut file = File::open(vdf).ok()?;
+        let kvs = torygg_vdf::parse(&mut file).ok()?;
+    
+        for kv in &kvs {
+            let components = kv.0.iter().collect::<Vec<_>>();
+            // Key we want:                    🠗
+            // libraryfolders/<lib_id>/apps/<appid>
+            if let Some(component) = components.get(3) {
+                if *component == app.appid.to_string().as_str() {
+                    // libraryfolders/<lib_id>/path
+                    let path = PathBuf::from_iter(kv.0.iter().take(2)).join("path");
+    
+                    return Some(kvs[&path].clone().into());
+                }
+            }
+        }
+    
+        None
+    }
+    
+    pub fn get_install_dir(app: apps::SteamApp) -> Option<PathBuf> {
+        let path = get_steam_library(app)?
+            .join("steamapps/common")
+            .join(app.install_dir);
+    
+        if path.exists() {
+            Some(path)
+        } else {
+            None
+        }
+    }
+    
+    pub fn get_wine_prefix(app: apps::SteamApp) -> Option<PathBuf> {
+        let path = get_steam_library(app)?
+            .join("steamapps/compatdata")
+            .join(app.appid.to_string())
+            .join("pfx");
+    
+        if path.exists() {
+            Some(path)
+        } else {
+            None
+        }
+    }
+}
 
 fn verify_directory(path: &Path) -> Result<(), &'static str> {
     if path.exists() {
@@ -157,8 +233,11 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
             })
             .collect::<Vec<String>>();
 
-        fs::write(get_profile_mods_dir(profile_name)?.join(mod_name), plugins.join("\n"))
-            .map_err(|_| "Failed to write to profile's mods dir")?;
+        fs::write(
+            get_profile_mods_dir(profile_name)?.join(mod_name),
+            plugins.join("\n"),
+        )
+        .map_err(|_| "Failed to write to profile's mods dir")?;
 
         let plugins_path = get_profile_appdata_dir(profile_name)?.join("Plugins.txt");
         let plugins_string = if plugins_path.exists() {
@@ -177,8 +256,10 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
             plugins_vec.push(format!("*{}", plugin));
         }
 
-        fs::write(plugins_path, plugins_vec.join("\n"))
-            .map_err(|e| { error!("{}", e.to_string()); "Failed to write Plugins.txt" })
+        fs::write(plugins_path, plugins_vec.join("\n")).map_err(|e| {
+            error!("{}", e.to_string());
+            "Failed to write Plugins.txt"
+        })
     }
 }
 
@@ -201,16 +282,23 @@ fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str
             plugins_string.split('\n').map(|s| s.to_owned()).collect()
         };
 
-        let mod_plugins_string = fs::read_to_string(get_profile_mods_dir(profile_name)?.join(mod_name))
-            .map_err(|_| "Failed to read mod plugins")?;
+        let mod_plugins_string =
+            fs::read_to_string(get_profile_mods_dir(profile_name)?.join(mod_name))
+                .map_err(|_| "Failed to read mod plugins")?;
 
         let mod_plugins_vec = if plugins_string.is_empty() {
             Vec::new()
         } else {
-            mod_plugins_string.split('\n').map(|s| s.to_owned()).collect()
+            mod_plugins_string
+                .split('\n')
+                .map(|s| s.to_owned())
+                .collect()
         };
 
-        let mod_plugins_vec_active = mod_plugins_vec.iter().map(|s| format!("*{}", s)).collect::<Vec<String>>();
+        let mod_plugins_vec_active = mod_plugins_vec
+            .iter()
+            .map(|s| format!("*{}", s))
+            .collect::<Vec<String>>();
 
         for i in 0..plugins_vec.len() {
             if mod_plugins_vec.contains(&plugins_vec[i]) {
@@ -223,8 +311,10 @@ fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str
 
         fs::remove_file(get_profile_mods_dir(profile_name)?.join(mod_name))
             .map_err(|_| "Failed to remove mod file")?;
-        fs::write(plugins_path, plugins_vec.join("\n"))
-            .map_err(|e| { error!("{}", e.to_string()); "Failed to write Plugins.txt" })
+        fs::write(plugins_path, plugins_vec.join("\n")).map_err(|e| {
+            error!("{}", e.to_string());
+            "Failed to write Plugins.txt"
+        })
     }
 }
 
@@ -245,10 +335,19 @@ fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'static st
 }
 
 fn get_skyrim_install_dir() -> Result<PathBuf, &'static str> {
-    Ok(PathBuf::from(
-        std::env::var_os("TORYGG_SKYRIM_INSTALL_DIRECTORY")
-            .ok_or("Environment variable 'TORYGG_SKYRIM_INSTALL_DIRECTORY' is not set!")?,
-    ))
+    match std::env::var_os("TORYGG_SKYRIM_INSTALL_DIRECTORY") {
+        Some(str) => {
+            let path = PathBuf::from(str);
+            if path.exists() {
+                Ok(path)
+            } else {
+                Err("specified path does not exist")
+            }
+        }
+        None => {
+            util::get_install_dir(util::apps::SKYRIM_SPECIAL_EDITION).ok_or("skyrim install dir not found")
+        }
+    }
 }
 
 fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
@@ -256,10 +355,36 @@ fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
 }
 
 fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
-    Ok(PathBuf::from(
-        std::env::var_os("TORYGG_USER_DIRECTORY")
-            .ok_or("Environment variable 'TORYGG_USER_DIRECTORY' is not set!")?,
-    ))
+    match std::env::var_os("TORYGG_USER_DIRECTORY") {
+        Some(str) => {
+            let path = PathBuf::from(str);
+            if path.exists() {
+                Ok(path)
+            } else {
+                Err("specified path does not exist")
+            }
+        }
+        None => {
+            let err = Err("wine user dir not found");
+            let mut path = util::get_wine_prefix(util::apps::SKYRIM_SPECIAL_EDITION).ok_or("skyrim install dir not found")?;
+            path.push("drive_c/users");
+            let steamuser = path.join("steamuser");
+            if steamuser.exists() {
+                Ok(steamuser)
+            } else {
+                if let Some(current_user) = std::env::vars().collect::<HashMap<_, _>>().get("USER") {
+                    let user_dir = path.join(current_user);
+                    if user_dir.exists() {
+                        Ok(user_dir)
+                    } else {
+                        err
+                    }
+                } else {
+                    err
+                }
+            }
+        }
+    }
 }
 
 fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
@@ -337,9 +462,11 @@ fn mount_directory(
         mount_dir.display(),
     ));
 
-    match command.execute().map_err(|_| "Failed to execute command")? {
-        Some(0) => Ok(()),
-        _ => Err("Failed to mount overlayfs"),
+    let status = command.status().map_err(|_| "Failed to execute command")?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Failed to mount overlayfs")
     }
 }
 
@@ -507,6 +634,7 @@ fn main() {
         },
         simplelog::Config::default(),
         simplelog::TerminalMode::Mixed,
+        simplelog::ColorChoice::Auto
     )
     .unwrap();
 
@@ -521,7 +649,7 @@ fn main() {
         return;
     }
 
-    // Get profiles, create a default profile of none exist
+    // Get profiles, create a default profile if none exist
     let profiles = match || -> Result<Vec<String>, &'static str> {
         let mut profiles = get_profiles()?;
         if profiles.is_empty() {

@@ -10,9 +10,6 @@ Requires:
 
 ## Usage
 ```bash
-export TORYGG_SKYRIM_INSTALL_DIRECTORY=/path/to/Skyrim/folder  # Needed to find the Skyrim folder
-export TORYGG_USER_DIRECTORY=/path/to/wine/user/dir  # Needed to find wine/proton user dir for to handle configs and plugins.txt
-
 torygg install <path/to/mod_archive> <desired_mod_name> # Install a mod  
 torygg activate <mod_name>  # Activate a mod  
 torygg mount  # Mount the mod overlayfs over the skyrim data directory
@@ -30,8 +27,7 @@ torygg help  # List of commands
 Uses SquashFS images to store installed mods, these images are then mounted in temporary directories. OverlayFS is then used to overlay the mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
 
 Todo:
-- Find the Skyrim install directory automatically
-- Lauch Skyrim not through Steam incase Steam wants to update it which might break mods.
+- Launch Skyrim not through Steam incase Steam wants to update it which might break mods.
 - Now modifies the Plugins.txt, however the implementation is dumb and needs improved.
 - Manipulation of the load order.
 - Other things that I can't think of.
