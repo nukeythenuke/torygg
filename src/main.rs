@@ -132,15 +132,15 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
             }
         }
 
-        let mut create_squashfs = shell(format!(
-            "mksquashfs \"{}\" \"{}\" -comp zstd -quiet",
+        let mut copy_files = shell(format!(
+            "cp -r \"{}\" \"{}\"",
             archive_mount_path.to_string_lossy(),
             get_mods_dir().unwrap().join(mod_name).to_string_lossy()
         ));
 
-        let status = create_squashfs.status().map_err(|_| "")?;
+        let status = copy_files.status().map_err(|_| "")?;
         if !status.success() {
-            return Err("Could not create squashfs image");
+            return Err("Could not copy mod files");
         }
 
         Ok(())
@@ -177,7 +177,7 @@ fn get_installed_mods() -> Result<Vec<String>, &'static str> {
         .map_err(|_| "Could not read mods dir")?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
-            (!e.is_dir())
+            (e.is_dir())
                 .then(|| ())
                 .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
         })
@@ -218,7 +218,7 @@ fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> 
         Err("Mod already active")
     } else {
         // Discover plugins
-        let mod_dir = mount_mod(mod_name)?;
+        let mod_dir = get_mods_dir()?.join(mod_name);
         let plugins = fs::read_dir(mod_dir)
             .map_err(|_| "Failed to read mod dir")?
             .filter_map(|e| Some(e.ok()?.path()))
@@ -459,6 +459,11 @@ fn mount_directory(
     let joined_paths = std::env::join_paths(lower_dirs).map_err(|_| "failed to join paths")?;
     let joined_paths = joined_paths.to_string_lossy();
 
+    info!("lowerdirs={:?}", lower_dirs);
+    info!("upperdir={:?}", upper_dir);
+    info!("work_dir={:?}", work_dir);
+    info!("mount_dir={:?}", mount_dir);
+
     let mut command = shell(format!(
         "fuse-overlayfs -o lowerdir=\"{}\",upperdir=\"{}\",workdir=\"{}\" \"{}\"",
         joined_paths,
@@ -466,6 +471,8 @@ fn mount_directory(
         work_dir.display(),
         mount_dir.display(),
     ));
+
+    info!("command={:?}", command);
 
     let status = command.status().map_err(|_| "Failed to execute command")?;
     if status.success() {
@@ -475,30 +482,13 @@ fn mount_directory(
     }
 }
 
-fn mount_mod(mod_name: &str) -> Result<PathBuf, &'static str> {
-    let path = TempDir::new()
-        .map_err(|_| "Couldn't create temp dir")?
-        .into_path();
-
-    let mut command = shell(format!(
-        "squashfuse \"{}\" \"{}\"",
-        get_mod_dir(mod_name)?.display(),
-        path.display()
-    ));
-
-    command
-        .execute()
-        .map_err(|_| "failed to mount mount directory")?;
-
-    Ok(path)
-}
-
 fn mount_skyrim_data_dir() -> Result<(), &'static str> {
     let skyrim_data_dir = get_skyrim_data_dir()?;
 
+    let mods_dir = get_mods_dir()?;
     let mut lower_dirs = get_active_mods(&get_active_profile())?
         .into_iter()
-        .filter_map(|m| mount_mod(&m).ok())
+        .map(|m| mods_dir.join(m))
         .collect::<Vec<PathBuf>>();
     lower_dirs.push(skyrim_data_dir.clone());
 
@@ -782,8 +772,11 @@ fn main() {
         info!("Mount.");
 
         if let Err(e) = || -> Result<(), &'static str> {
+            info!("Mounting data dir");
             mount_skyrim_data_dir()?;
+            info!("Mounting configs dir");
             mount_skyrim_configs_dir()?;
+            info!("Mounting appdata dir");
             mount_skyrim_appdata_dir()
         }() {
             error!("{}", e);
