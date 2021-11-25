@@ -5,6 +5,7 @@ use simplelog::TermLogger;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -104,24 +105,25 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
     } else if is_mod_installed(mod_name)? {
         Err("Mod already exists!")
     } else {
-        let archive_mount_dir = TempDir::new().unwrap();
-        let archive_mount_path = archive_mount_dir.into_path();
-        let mut mount_archive = shell(format!(
-            "archivefs \"{}\" \"{}\"",
-            archive_path.to_string_lossy(),
-            archive_mount_path.to_string_lossy()
-        ));
+        let archive_extract_dir = TempDir::new().unwrap();
+        let archive_extract_path = archive_extract_dir.into_path();
 
-        let status = mount_archive
+        // Use p7zip to extract the archive to a temporary directory
+        let mut command = Command::new("7z");
+        command.arg("x");
+        command.arg(format!("-o{}", archive_extract_path.display()));
+        command.arg(&archive_path);
+
+        let status = command
             .status()
-            .map_err(|_| "Unable to mount archive")?;
+            .map_err(|_| "Unable to extract archive")?;
         if !status.success() {
-            return Err("Unable to mount archive");
+            return Err("Unable to extract archive");
         }
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
-        let mut mod_root = archive_mount_path.clone();
+        let mut mod_root = archive_extract_path.clone();
         let entries = fs::read_dir(&mod_root)
             .map_err(|_| "Couldn't read dir")?
             .filter_map(|e| e.ok())
@@ -133,31 +135,21 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
             }
         }
 
+        // This is where we would want to handle FOMODS
+
         // Copy all files in the mod root to the installed mods directory
         let install_path = get_mods_dir().unwrap().join(mod_name);
         verify_directory(&install_path).unwrap();
         for entry in WalkDir::new(&mod_root).min_depth(1).into_iter().filter_map(|e| e.ok()) {
-            let path = entry.path();
-            let relative_path = path.strip_prefix(&mod_root).unwrap();
+            let from = entry.path();
+            let relative_path = from.strip_prefix(&mod_root).unwrap();
+            let to = install_path.join(relative_path);
 
-            if path.is_dir() {
-                std::fs::create_dir(install_path.join(relative_path)).unwrap();
+            if from.is_dir() {
+                std::fs::create_dir(to).unwrap();
             } else {
-                std::fs::copy(path, install_path.join(relative_path)).unwrap();
+                std::fs::copy(from, to).unwrap();
             }
-        }
-
-        // Umount the temp directory
-        let mut umount_archive = shell(format!(
-            "umount \"{}\"",
-            archive_mount_path.to_string_lossy()
-        ));
-
-        let status = umount_archive
-            .status()
-            .map_err(|_| "Unable to umount archive")?;
-        if !status.success() {
-            return Err("Unable to umount archive");
         }
 
         Ok(())

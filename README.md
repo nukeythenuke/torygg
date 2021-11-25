@@ -1,11 +1,10 @@
 # torygg
 A mod manager for Skyrim Special Edition on linux
 
-WIP.
+WIP. Currently does not work as a change in fuse-overlayfs makes mounting a lowerdir on itself cause processes accessing the mounted directories to hang indefinitely (this was always undefined behaviour).
 
 Requires:
-- [archivefs](https://github.com/bugnano/archivefs) (archives are mounted, then a squashfs image is created from the mounted directory)
-- [squashfuse](https://github.com/vasi/squashfuse) (to mount squashfs images)
+- [p7zip](https://github.com/jinfeihan57/p7zip) for extracting archives
 - [fuse-overlayfs](https://github.com/containers/fuse-overlayfs) (to mount mods on top of the Skyrim data directory)
 
 ## Usage
@@ -24,7 +23,7 @@ torygg help  # List of commands
 
 ## Info
 
-Uses SquashFS images to store installed mods, these images are then mounted in temporary directories. OverlayFS is then used to overlay the mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
+OverlayFS is used to overlay mods on top of the Skyrim data directory, an "overwrite" directory is overlayed at the top that will catch files created and modified when the game is run leaving the data directory unmodified.
 
 Todo:
 - Launch Skyrim not through Steam incase Steam wants to update it which might break mods.
