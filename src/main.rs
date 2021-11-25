@@ -105,7 +105,7 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
         Err("Mod already exists!")
     } else {
         let archive_mount_dir = TempDir::new().unwrap();
-        let mut archive_mount_path = archive_mount_dir.into_path();
+        let archive_mount_path = archive_mount_dir.into_path();
         let mut mount_archive = shell(format!(
             "archivefs \"{}\" \"{}\"",
             archive_path.to_string_lossy(),
@@ -121,26 +121,43 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
-        let entries = fs::read_dir(&archive_mount_path)
+        let mut mod_root = archive_mount_path.clone();
+        let entries = fs::read_dir(&mod_root)
             .map_err(|_| "Couldn't read dir")?
             .filter_map(|e| e.ok())
             .collect::<Vec<fs::DirEntry>>();
         if entries.len() == 1 {
             let path = entries[0].path();
             if path.is_dir() {
-                archive_mount_path = path
+                mod_root = path
             }
         }
 
-        let mut copy_files = shell(format!(
-            "cp -r \"{}\" \"{}\"",
-            archive_mount_path.to_string_lossy(),
-            get_mods_dir().unwrap().join(mod_name).to_string_lossy()
+        // Copy all files in the mod root to the installed mods directory
+        let install_path = get_mods_dir().unwrap().join(mod_name);
+        verify_directory(&install_path).unwrap();
+        for entry in WalkDir::new(&mod_root).min_depth(1).into_iter().filter_map(|e| e.ok()) {
+            let path = entry.path();
+            let relative_path = path.strip_prefix(&mod_root).unwrap();
+
+            if path.is_dir() {
+                std::fs::create_dir(install_path.join(relative_path)).unwrap();
+            } else {
+                std::fs::copy(path, install_path.join(relative_path)).unwrap();
+            }
+        }
+
+        // Umount the temp directory
+        let mut umount_archive = shell(format!(
+            "umount \"{}\"",
+            archive_mount_path.to_string_lossy()
         ));
 
-        let status = copy_files.status().map_err(|_| "")?;
+        let status = umount_archive
+            .status()
+            .map_err(|_| "Unable to umount archive")?;
         if !status.success() {
-            return Err("Could not copy mod files");
+            return Err("Unable to umount archive");
         }
 
         Ok(())
