@@ -114,9 +114,7 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
         command.arg(format!("-o{}", archive_extract_path.display()));
         command.arg(&archive_path);
 
-        let status = command
-            .status()
-            .map_err(|_| "Unable to extract archive")?;
+        let status = command.status().map_err(|_| "Unable to extract archive")?;
         if !status.success() {
             return Err("Unable to extract archive");
         }
@@ -140,7 +138,11 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
         // Copy all files in the mod root to the installed mods directory
         let install_path = get_mods_dir().unwrap().join(mod_name);
         verify_directory(&install_path).unwrap();
-        for entry in WalkDir::new(&mod_root).min_depth(1).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(&mod_root)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let from = entry.path();
             let relative_path = from.strip_prefix(&mod_root).unwrap();
             let to = install_path.join(relative_path);
