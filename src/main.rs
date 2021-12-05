@@ -31,20 +31,20 @@ mod util {
             pub appid: isize,
             pub install_dir: &'static str,
             pub executable: &'static str,
-            pub mod_loader_executable: Option<&'static str>
+            pub mod_loader_executable: Option<&'static str>,
         }
 
         pub const SKYRIM: SteamApp = SteamApp {
             appid: 72850,
             install_dir: "Skyrim",
             executable: "Skyrim.exe",
-            mod_loader_executable: None
+            mod_loader_executable: None,
         };
         pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
             appid: 489830,
             install_dir: "Skyrim Special Edition",
             executable: "SkyrimSE.exe",
-            mod_loader_executable: Some("skse64_loader.exe")
+            mod_loader_executable: Some("skse64_loader.exe"),
         };
     }
 
@@ -132,7 +132,7 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
 
         // Detect if mod is contained within a subdirectory
         // and move it if it is
-        let mut mod_root = archive_extract_path.clone();
+        let mut mod_root = archive_extract_path;
         let entries = fs::read_dir(&mod_root)
             .map_err(|_| "Couldn't read dir")?
             .filter_map(|e| e.ok())
@@ -360,10 +360,6 @@ fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'static st
     Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
-// fn get_skyrim_data_dir() -> Result<PathBuf, &'static str> {
-//     Ok(get_skyrim_install_dir()?.join("Data"))
-// }
-
 fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
     match std::env::var_os("TORYGG_USER_DIRECTORY") {
         Some(str) => {
@@ -382,18 +378,17 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
             let steamuser = path.join("steamuser");
             if steamuser.exists() {
                 Ok(steamuser)
-            } else {
-                if let Some(current_user) = std::env::vars().collect::<HashMap<_, _>>().get("USER")
-                {
-                    let user_dir = path.join(current_user);
-                    if user_dir.exists() {
-                        Ok(user_dir)
-                    } else {
-                        err
-                    }
+            } else if let Some(current_user) =
+                std::env::vars().collect::<HashMap<_, _>>().get("USER")
+            {
+                let user_dir = path.join(current_user);
+                if user_dir.exists() {
+                    Ok(user_dir)
                 } else {
                     err
                 }
+            } else {
+                err
             }
         }
     }
@@ -445,7 +440,7 @@ fn get_profile_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
 }
 
 fn get_profile_mods_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = get_profile_dir(&profile_name)?.join("Mods");
+    let dir = get_profile_dir(profile_name)?.join("Mods");
     verify_directory(&dir)?;
     Ok(dir)
 }
@@ -497,11 +492,11 @@ fn mount_data_dir() -> Result<(), &'static str> {
 
     // Move data folder
     match std::fs::rename(&data_dir, &backup_dir) {
-        _ => ()
+        _ => (),
     }
     // Recreate the data folder
     match std::fs::create_dir(&data_dir) {
-        _ => ()
+        _ => (),
     }
 
     let mods_dir = get_mods_dir()?;
@@ -522,15 +517,18 @@ fn mount_data_dir() -> Result<(), &'static str> {
 
 fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
     let configs_dir = get_skyrim_config_dir()?;
-    let backup_dir = configs_dir.parent().unwrap().join("Skyrim Special Edition~");
+    let backup_dir = configs_dir
+        .parent()
+        .unwrap()
+        .join("Skyrim Special Edition~");
 
     // Move configs folder
     match std::fs::rename(&configs_dir, &backup_dir) {
-        _ => ()
+        _ => (),
     }
     // Recreate the configs folder
     match std::fs::create_dir(&configs_dir) {
-        _ => ()
+        _ => (),
     }
 
     let override_config_dir = get_data_dir()?.join("Configs");
@@ -539,25 +537,23 @@ fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
     let work_dir = get_data_dir()?.join(".OverlayFS");
     verify_directory(&work_dir)?;
 
-    mount_directory(
-        &[backup_dir],
-        &override_config_dir,
-        &work_dir,
-        &configs_dir,
-    )
+    mount_directory(&[backup_dir], &override_config_dir, &work_dir, &configs_dir)
 }
 
 fn mount_skyrim_appdata_dir() -> Result<(), &'static str> {
     let appdata_dir = get_skyrim_appdata_dir()?;
-    let backup_dir = appdata_dir.parent().unwrap().join("Skyrim Special Edition~");
+    let backup_dir = appdata_dir
+        .parent()
+        .unwrap()
+        .join("Skyrim Special Edition~");
 
     // Move configs folder
     match std::fs::rename(&appdata_dir, &backup_dir) {
-        _ => ()
+        _ => (),
     }
     // Recreate the configs folder
     match std::fs::create_dir(&appdata_dir) {
-        _ => ()
+        _ => (),
     }
 
     let override_appdata_dir = get_profile_appdata_dir(&get_active_profile())?;
@@ -652,14 +648,12 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("run")
-                .about("Launch the game with mods")
-                // .arg(
-                //     Arg::with_name("GAME")
-                //         .help("Game to launch")
-                //         .required(true)
-                //         .index(1),
-                // )
+            SubCommand::with_name("run").about("Launch the game with mods"), // .arg(
+                                                                             //     Arg::with_name("GAME")
+                                                                             //         .help("Game to launch")
+                                                                             //         .required(true)
+                                                                             //         .index(1),
+                                                                             // )
         )
         .subcommand(SubCommand::with_name("overwrite").about("List contents of overwite directory"))
         .get_matches();
@@ -835,13 +829,9 @@ fn main() {
             Some(dir) => dir,
             _ => {
                 error!("game not installed!");
-                return
+                return;
             }
         };
-
-        // Move Data folder to backup
-        // Create new folder in Data folders place
-        // Overlay backup folder on new folder
 
         // Mount folders
         if let Err(e) = || -> Result<(), &'static str> {
@@ -866,18 +856,30 @@ fn main() {
                     install_dir.join(app.executable)
                 }
             }
-            _ => install_dir.join(app.executable)
+            _ => install_dir.join(app.executable),
         };
-        
 
         println!("Starting protontricks\n");
         let mut protontricks = Command::new("protontricks")
             .arg(app.appid.to_string())
             .arg("shell")
             .stdin(Stdio::piped())
-            .spawn().unwrap();
+            .spawn()
+            .unwrap();
 
-        protontricks.stdin.take().unwrap().write_all(format!("cd \"{}\" && wine \"{}\"\n", install_dir.display(), executable.display()).as_bytes()).unwrap();
+        protontricks
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(
+                format!(
+                    "cd \"{}\" && wine \"{}\"\n",
+                    install_dir.display(),
+                    executable.display()
+                )
+                .as_bytes(),
+            )
+            .unwrap();
         protontricks.wait().unwrap();
         println!("Game stopped");
 
@@ -897,10 +899,22 @@ fn main() {
         // Move folders back
         std::fs::rename(install_dir.join("Data~"), install_dir.join("Data")).unwrap();
         let configs_dir = get_skyrim_config_dir().unwrap();
-        std::fs::rename(configs_dir.parent().unwrap().join("Skyrim Special Edition~"), configs_dir).unwrap();
+        std::fs::rename(
+            configs_dir
+                .parent()
+                .unwrap()
+                .join("Skyrim Special Edition~"),
+            configs_dir,
+        )
+        .unwrap();
         let appdata_dir = get_skyrim_appdata_dir().unwrap();
-        std::fs::rename(appdata_dir.parent().unwrap().join("Skyrim Special Edition~"), appdata_dir).unwrap();
-
-        return;
+        std::fs::rename(
+            appdata_dir
+                .parent()
+                .unwrap()
+                .join("Skyrim Special Edition~"),
+            appdata_dir,
+        )
+        .unwrap();
     }
 }
