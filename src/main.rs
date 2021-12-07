@@ -454,10 +454,17 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
 
 struct AppLauncher {
     app: &'static util::apps::SteamApp,
-    mounted_paths: Option<Vec<PathBuf>>
+    mounted_paths: Vec<PathBuf>
 }
 
 impl AppLauncher {
+    fn new(app: &'static util::apps::SteamApp) -> Self {
+        AppLauncher {
+            app,
+            mounted_paths: Vec::new()
+        }
+    }
+
     fn mount_path(&mut self, path: &Path, lower_paths: &mut Vec<PathBuf>, upper_path: &Path, work_path: &Path) -> Result<(), &'static str> {
         let last_component = path.iter().last().ok_or("Failed to get last component")?.to_string_lossy().to_string();
         let backup_path = path.parent().ok_or("Path has no parent")?.join(last_component + "~");
@@ -500,13 +507,7 @@ impl AppLauncher {
             return Err("Child failed")
         }
 
-        if let Some(mounted_paths) = &mut self.mounted_paths {
-            mounted_paths.push(path.to_owned());
-        } else {
-            let mut mounted_paths = Vec::new();
-            mounted_paths.push(path.to_owned());
-            self.mounted_paths = mounted_paths.into();
-        }
+        self.mounted_paths.push(path.to_owned());
 
         info!("Mounted: {:?}", path);
         Ok(())
@@ -608,8 +609,8 @@ impl AppLauncher {
     
     fn unmount_all(&mut self) -> Result<(), &'static str> {
         info!("Unmounting paths");
-        if let Some(paths) = &mut self.mounted_paths {
-            paths.retain(|path| {
+        if !self.mounted_paths.is_empty() {
+            self.mounted_paths.retain(|path| {
                 info!("--> {:?}", path);
                 let mut cmd = Command::new("umount");
                 cmd.arg(path);
@@ -652,10 +653,10 @@ impl AppLauncher {
                 false
             });
 
-            if paths.is_empty() {
+            if self.mounted_paths.is_empty() {
                 Ok(())
             } else {
-                error!("Failed to unmount: {:?}", paths);
+                error!("Failed to unmount: {:?}", self.mounted_paths);
                 Err("Failed to unmount all paths")
             }
         } else {
@@ -671,8 +672,8 @@ impl Drop for AppLauncher {
         // Unmount directories
         if let Err(err) = self.unmount_all() {
             error!("{}", err);
-            if let Some(paths) = &self.mounted_paths {
-                for path in paths {
+            if !self.mounted_paths.is_empty() {
+                for path in & self.mounted_paths {
                     error!("failed to unmount: {}", path.display());
                 }
             }
@@ -926,10 +927,7 @@ fn main() {
             }
         };
 
-        let mut launcher = AppLauncher {
-            app,
-            mounted_paths: None,
-        };
+        let mut launcher = AppLauncher::new(app);
 
         if let Err(err) = launcher.run() {
             error!("{}", err);
