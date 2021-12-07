@@ -1,5 +1,3 @@
-#![feature(drain_filter)]
-
 use clap::{crate_version, App, Arg, SubCommand};
 use log::{error, info};
 use simplelog::TermLogger;
