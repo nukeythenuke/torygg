@@ -401,7 +401,8 @@ fn get_config_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
 
 // Folder where profile Plugins.txt is kept
 fn get_appdata_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?.join(String::from("Local Settings/Application Data/") + app.install_dir))
+    Ok(get_wine_user_dir()?
+        .join(String::from("Local Settings/Application Data/") + app.install_dir))
 }
 
 fn get_data_dir() -> Result<PathBuf, &'static str> {
@@ -454,24 +455,39 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
 
 struct AppLauncher {
     app: &'static util::apps::SteamApp,
-    mounted_paths: Vec<PathBuf>
+    mounted_paths: Vec<PathBuf>,
 }
 
 impl AppLauncher {
     fn new(app: &'static util::apps::SteamApp) -> Self {
         AppLauncher {
             app,
-            mounted_paths: Vec::new()
+            mounted_paths: Vec::new(),
         }
     }
 
-    fn mount_path(&mut self, path: &Path, lower_paths: &mut Vec<PathBuf>, upper_path: &Path, work_path: &Path) -> Result<(), &'static str> {
-        let last_component = path.iter().last().ok_or("Failed to get last component")?.to_string_lossy().to_string();
-        let backup_path = path.parent().ok_or("Path has no parent")?.join(last_component + "~");
+    fn mount_path(
+        &mut self,
+        path: &Path,
+        lower_paths: &mut Vec<PathBuf>,
+        upper_path: &Path,
+        work_path: &Path,
+    ) -> Result<(), &'static str> {
+        let last_component = path
+            .iter()
+            .last()
+            .ok_or("Failed to get last component")?
+            .to_string_lossy()
+            .to_string();
+        let backup_path = path
+            .parent()
+            .ok_or("Path has no parent")?
+            .join(last_component + "~");
 
-        // Add the backup path (original contents) to lower_paths 
+        // Add the backup path (original contents) to lower_paths
         lower_paths.push(backup_path.clone());
-        let lower_paths_string = std::env::join_paths(lower_paths).map_err(|_| "Failed to join lower paths")?;
+        let lower_paths_string =
+            std::env::join_paths(lower_paths).map_err(|_| "Failed to join lower paths")?;
         let lower_paths_string = lower_paths_string.to_string_lossy();
 
         // Move path to backup
@@ -486,7 +502,8 @@ impl AppLauncher {
 
         let mut cmd = Command::new("fuse-overlayfs");
         cmd.arg("-o");
-        cmd.arg(format!("lowerdir={},upperdir={},workdir={}",
+        cmd.arg(format!(
+            "lowerdir={},upperdir={},workdir={}",
             lower_paths_string,
             upper_path.display(),
             work_path.display()
@@ -500,11 +517,11 @@ impl AppLauncher {
 
         let status = match child.wait() {
             Ok(status) => status,
-            Err(_) => return Err("Child failed")
+            Err(_) => return Err("Child failed"),
         };
 
         if !status.success() {
-            return Err("Child failed")
+            return Err("Child failed");
         }
 
         self.mounted_paths.push(path.to_owned());
@@ -515,7 +532,7 @@ impl AppLauncher {
     fn mount_all(&mut self) -> Result<(), &'static str> {
         let work_path = get_data_dir()?.join(".OverlayFS");
         verify_directory(&work_path)?;
-        
+
         // Mount data
         let install_path = match get_install_dir(self.app) {
             Some(path) => path,
@@ -533,7 +550,7 @@ impl AppLauncher {
         let override_path = get_overwrite_dir()?;
 
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
-        
+
         // Mount config
         let config_path = get_config_dir(self.app)?;
         let upper_path = get_data_dir()?.join("Configs");
@@ -548,7 +565,7 @@ impl AppLauncher {
 
         Ok(())
     }
-    
+
     pub fn run(&mut self) -> Result<(), &'static str> {
         self.mount_all()?;
 
@@ -575,7 +592,7 @@ impl AppLauncher {
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,
-            Err(_) => return Err("Failed to spawn child")
+            Err(_) => return Err("Failed to spawn child"),
         };
 
         if child
@@ -589,24 +606,26 @@ impl AppLauncher {
                     executable.display()
                 )
                 .as_bytes(),
-            ).is_err() {
-            return Err("failed to write to child")
+            )
+            .is_err()
+        {
+            return Err("failed to write to child");
         }
-        
+
         let status = match child.wait() {
             Ok(status) => status,
             Err(_) => return Err("Child failed"),
         };
 
         if !status.success() {
-            return Err("Child failed")
+            return Err("Child failed");
         }
 
         info!("Game stopped");
 
         Ok(())
     }
-    
+
     fn unmount_all(&mut self) -> Result<(), &'static str> {
         info!("Unmounting paths");
         if !self.mounted_paths.is_empty() {
@@ -617,16 +636,16 @@ impl AppLauncher {
 
                 let mut child = match cmd.spawn() {
                     Ok(child) => child,
-                    Err(_) => return true
+                    Err(_) => return true,
                 };
 
                 let status = match child.wait() {
                     Ok(status) => status,
-                    Err(_) => return true
+                    Err(_) => return true,
                 };
 
                 if !status.success() {
-                    return true
+                    return true;
                 }
 
                 let err = "Failed to restore path";
@@ -634,17 +653,20 @@ impl AppLauncher {
                     Some(component) => component,
                     None => {
                         error!("{}", err);
-                        return false
+                        return false;
                     }
-                }.to_string_lossy().to_string();
-                
+                }
+                .to_string_lossy()
+                .to_string();
+
                 let backup_path = match path.parent() {
                     Some(path) => path,
                     None => {
                         error!("{}", err);
-                        return false
+                        return false;
                     }
-                }.join(last_component + "~");
+                }
+                .join(last_component + "~");
 
                 if std::fs::rename(&backup_path, path).is_err() {
                     error!("{}", err);
@@ -673,7 +695,7 @@ impl Drop for AppLauncher {
         if let Err(err) = self.unmount_all() {
             error!("{}", err);
             if !self.mounted_paths.is_empty() {
-                for path in & self.mounted_paths {
+                for path in &self.mounted_paths {
                     error!("failed to unmount: {}", path.display());
                 }
             }
@@ -915,9 +937,7 @@ fn main() {
         let game = matches.value_of("GAME").unwrap().to_lowercase();
         let app = match game.as_str() {
             "skyrim" => &util::apps::SKYRIM,
-            "skyrimse" | "skyrim special edition" => {
-                &util::apps::SKYRIM_SPECIAL_EDITION
-            },
+            "skyrimse" | "skyrim special edition" => &util::apps::SKYRIM_SPECIAL_EDITION,
             _ => {
                 println!("Unknown game! Valid options are:");
                 for game in ["Skyrim", "SkyrimSE"] {
