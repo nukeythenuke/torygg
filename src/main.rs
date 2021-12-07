@@ -951,7 +951,6 @@ fn main() {
 
         if let Err(err) = launcher.run() {
             error!("{}", err);
-            return;
         }
     }
 }
