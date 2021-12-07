@@ -1,6 +1,7 @@
+#![feature(drain_filter)]
+
 use clap::{crate_version, App, Arg, SubCommand};
-use execute::{shell, Execute};
-use log::{error, info, warn};
+use log::{error, info};
 use simplelog::TermLogger;
 use std::collections::HashMap;
 use std::fs;
@@ -394,13 +395,13 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
     }
 }
 
-fn get_skyrim_config_dir() -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?.join("My Documents/My Games/Skyrim Special Edition"))
+fn get_config_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
+    Ok(get_wine_user_dir()?.join(String::from("My Documents/My Games/") + app.install_dir))
 }
 
 // Folder where profile Plugins.txt is kept
-fn get_skyrim_appdata_dir() -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?.join("Local Settings/Application Data/Skyrim Special Edition"))
+fn get_appdata_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
+    Ok(get_wine_user_dir()?.join(String::from("Local Settings/Application Data/") + app.install_dir))
 }
 
 fn get_data_dir() -> Result<PathBuf, &'static str> {
@@ -451,131 +452,231 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
     Ok(dir)
 }
 
-// Mount a directory using fuse-overlayfs
-fn mount_directory(
-    lower_dirs: &[PathBuf],
-    upper_dir: &Path,
-    work_dir: &Path,
-    mount_dir: &Path,
-) -> Result<(), &'static str> {
-    let joined_paths = std::env::join_paths(lower_dirs).map_err(|_| "failed to join paths")?;
-    let joined_paths = joined_paths.to_string_lossy();
+struct AppLauncher {
+    app: &'static util::apps::SteamApp,
+    mounted_paths: Option<Vec<PathBuf>>
+}
 
-    info!("lowerdirs={:?}", lower_dirs);
-    info!("upperdir={:?}", upper_dir);
-    info!("work_dir={:?}", work_dir);
-    info!("mount_dir={:?}", mount_dir);
+impl AppLauncher {
+    fn mount_path(&mut self, path: &Path, lower_paths: &mut Vec<PathBuf>, upper_path: &Path, work_path: &Path) -> Result<(), &'static str> {
+        let last_component = path.iter().last().ok_or("Failed to get last component")?.to_string_lossy().to_string();
+        let backup_path = path.parent().ok_or("Path has no parent")?.join(last_component + "~");
 
-    let mut command = shell(format!(
-        "fuse-overlayfs -o lowerdir=\"{}\",upperdir=\"{}\",workdir=\"{}\" \"{}\"",
-        joined_paths,
-        upper_dir.display(),
-        work_dir.display(),
-        mount_dir.display(),
-    ));
+        // Add the backup path (original contents) to lower_paths 
+        lower_paths.push(backup_path.clone());
+        let lower_paths_string = std::env::join_paths(lower_paths).map_err(|_| "Failed to join lower paths")?;
+        let lower_paths_string = lower_paths_string.to_string_lossy();
 
-    info!("command={:?}", command);
+        // Move path to backup
+        let err = std::fs::rename(path, &backup_path).map_err(|_| "Failed to rename dir");
+        if err.is_err() {
+            error!("Failed to rename {:?} to {:?}", path, backup_path);
+        }
+        err?;
 
-    let status = command.status().map_err(|_| "Failed to execute command")?;
-    if status.success() {
+        // Recreate path so we can mount on it
+        std::fs::create_dir(path).map_err(|_| "Failed to recreate dir")?;
+
+        let mut cmd = Command::new("fuse-overlayfs");
+        cmd.arg("-o");
+        cmd.arg(format!("lowerdir={},upperdir={},workdir={}",
+            lower_paths_string,
+            upper_path.display(),
+            work_path.display()
+        ));
+        cmd.arg(path);
+
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(_) => return Err("Failed to spawn child"),
+        };
+
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(_) => return Err("Child failed")
+        };
+
+        if !status.success() {
+            return Err("Child failed")
+        }
+
+        if let Some(mounted_paths) = &mut self.mounted_paths {
+            mounted_paths.push(path.to_owned());
+        } else {
+            let mut mounted_paths = Vec::new();
+            mounted_paths.push(path.to_owned());
+            self.mounted_paths = mounted_paths.into();
+        }
+
+        info!("Mounted: {:?}", path);
         Ok(())
-    } else {
-        Err("Failed to mount overlayfs")
+    }
+    fn mount_all(&mut self) -> Result<(), &'static str> {
+        let work_path = get_data_dir()?.join(".OverlayFS");
+        verify_directory(&work_path)?;
+        
+        // Mount data
+        let install_path = match get_install_dir(self.app) {
+            Some(path) => path,
+            None => return Err("Game not installed"),
+        };
+
+        let data_path = install_path.join("Data");
+
+        let mods_path = get_mods_dir()?;
+        let mut mod_paths = get_active_mods(&get_active_profile())?
+            .into_iter()
+            .map(|m| mods_path.join(m))
+            .collect::<Vec<_>>();
+
+        let override_path = get_overwrite_dir()?;
+
+        self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
+        
+        // Mount config
+        let config_path = get_config_dir(self.app)?;
+        let upper_path = get_data_dir()?.join("Configs");
+
+        self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
+
+        // Mount appdata
+        let appdata_path = get_appdata_dir(self.app)?;
+        let upper_path = get_data_dir()?.join("Configs");
+
+        self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
+
+        Ok(())
+    }
+    
+    pub fn run(&mut self) -> Result<(), &'static str> {
+        self.mount_all()?;
+
+        // Launch the game and wait for it to close
+        // Check for presence of mod loader executable
+        let install_dir = get_install_dir(self.app).unwrap();
+        let executable = match self.app.mod_loader_executable {
+            Some(exe) => {
+                let path = install_dir.join(exe);
+                if path.exists() {
+                    path
+                } else {
+                    install_dir.join(self.app.executable)
+                }
+            }
+            _ => install_dir.join(self.app.executable),
+        };
+
+        info!("Starting protontricks");
+        let mut cmd = Command::new("protontricks");
+        cmd.arg(self.app.appid.to_string());
+        cmd.arg("shell");
+        cmd.stdin(Stdio::piped());
+
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(_) => return Err("Failed to spawn child")
+        };
+
+        if child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(
+                format!(
+                    "cd \"{}\" && wine \"{}\"\n",
+                    install_dir.display(),
+                    executable.display()
+                )
+                .as_bytes(),
+            ).is_err() {
+            return Err("failed to write to child")
+        }
+        
+        let status = match child.wait() {
+            Ok(status) => status,
+            Err(_) => return Err("Child failed"),
+        };
+
+        if !status.success() {
+            return Err("Child failed")
+        }
+
+        info!("Game stopped");
+
+        Ok(())
+    }
+    
+    fn unmount_all(&mut self) -> Result<(), &'static str> {
+        info!("Unmounting paths");
+        if let Some(paths) = &mut self.mounted_paths {
+            paths.retain(|path| {
+                info!("--> {:?}", path);
+                let mut cmd = Command::new("umount");
+                cmd.arg(path);
+
+                let mut child = match cmd.spawn() {
+                    Ok(child) => child,
+                    Err(_) => return true
+                };
+
+                let status = match child.wait() {
+                    Ok(status) => status,
+                    Err(_) => return true
+                };
+
+                if !status.success() {
+                    return true
+                }
+
+                let err = "Failed to restore path";
+                let last_component = match path.iter().last() {
+                    Some(component) => component,
+                    None => {
+                        error!("{}", err);
+                        return false
+                    }
+                }.to_string_lossy().to_string();
+                
+                let backup_path = match path.parent() {
+                    Some(path) => path,
+                    None => {
+                        error!("{}", err);
+                        return false
+                    }
+                }.join(last_component + "~");
+
+                if std::fs::rename(&backup_path, path).is_err() {
+                    error!("{}", err);
+                }
+
+                false
+            });
+
+            if paths.is_empty() {
+                Ok(())
+            } else {
+                error!("Failed to unmount: {:?}", paths);
+                Err("Failed to unmount all paths")
+            }
+        } else {
+            info!("No dirs to unmount.");
+            Ok(())
+        }
     }
 }
 
-fn mount_data_dir() -> Result<(), &'static str> {
-    let install_dir = get_install_dir(&util::apps::SKYRIM_SPECIAL_EDITION).unwrap();
-    let data_dir = install_dir.join("Data");
-
-    let backup_dir = install_dir.join("Data~");
-
-    // Move data folder
-    match std::fs::rename(&data_dir, &backup_dir) {
-        _ => (),
-    }
-    // Recreate the data folder
-    match std::fs::create_dir(&data_dir) {
-        _ => (),
-    }
-
-    let mods_dir = get_mods_dir()?;
-    let mut lower_dirs = get_active_mods(&get_active_profile())?
-        .into_iter()
-        .map(|m| mods_dir.join(m))
-        .collect::<Vec<PathBuf>>();
-    lower_dirs.push(backup_dir);
-
-    let upper_dir = get_overwrite_dir()?;
-    verify_directory(&upper_dir)?;
-
-    let work_dir = get_data_dir()?.join(".OverlayFS");
-    verify_directory(&work_dir)?;
-
-    mount_directory(&lower_dirs, &upper_dir, &work_dir, &data_dir)
-}
-
-fn mount_skyrim_configs_dir() -> Result<(), &'static str> {
-    let configs_dir = get_skyrim_config_dir()?;
-    let backup_dir = configs_dir
-        .parent()
-        .unwrap()
-        .join("Skyrim Special Edition~");
-
-    // Move configs folder
-    match std::fs::rename(&configs_dir, &backup_dir) {
-        _ => (),
-    }
-    // Recreate the configs folder
-    match std::fs::create_dir(&configs_dir) {
-        _ => (),
-    }
-
-    let override_config_dir = get_data_dir()?.join("Configs");
-    verify_directory(&override_config_dir)?;
-
-    let work_dir = get_data_dir()?.join(".OverlayFS");
-    verify_directory(&work_dir)?;
-
-    mount_directory(&[backup_dir], &override_config_dir, &work_dir, &configs_dir)
-}
-
-fn mount_skyrim_appdata_dir() -> Result<(), &'static str> {
-    let appdata_dir = get_skyrim_appdata_dir()?;
-    let backup_dir = appdata_dir
-        .parent()
-        .unwrap()
-        .join("Skyrim Special Edition~");
-
-    // Move configs folder
-    match std::fs::rename(&appdata_dir, &backup_dir) {
-        _ => (),
-    }
-    // Recreate the configs folder
-    match std::fs::create_dir(&appdata_dir) {
-        _ => (),
-    }
-
-    let override_appdata_dir = get_profile_appdata_dir(&get_active_profile())?;
-
-    let work_dir = get_data_dir()?.join(".OverlayFS");
-    verify_directory(&work_dir)?;
-
-    mount_directory(
-        &[backup_dir],
-        &override_appdata_dir,
-        &work_dir,
-        &appdata_dir,
-    )
-}
-
-fn unmount_directory(dir: &Path) -> Result<(), &'static str> {
-    let dir_string = format!("\"{}\"", dir.to_string_lossy());
-
-    let mut command = shell(format!("umount {}", dir_string));
-    match command.execute().map_err(|_| "Failed to execute command")? {
-        Some(0) => Ok(()),
-        _ => Err("Failed to umount overlayfs"),
+impl Drop for AppLauncher {
+    fn drop(&mut self) {
+        info!("AppLauncher dropped");
+        // Unmount directories
+        if let Err(err) = self.unmount_all() {
+            error!("{}", err);
+            if let Some(paths) = &self.mounted_paths {
+                for path in paths {
+                    error!("failed to unmount: {}", path.display());
+                }
+            }
+        }
     }
 }
 
@@ -648,12 +749,14 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("run").about("Launch the game with mods"), // .arg(
-                                                                             //     Arg::with_name("GAME")
-                                                                             //         .help("Game to launch")
-                                                                             //         .required(true)
-                                                                             //         .index(1),
-                                                                             // )
+            SubCommand::with_name("run")
+                .about("Launch the game with mods")
+                .arg(
+                    Arg::with_name("GAME")
+                        .help("Game to launch")
+                        .required(true)
+                        .index(1),
+                ),
         )
         .subcommand(SubCommand::with_name("overwrite").about("List contents of overwite directory"))
         .get_matches();
@@ -808,113 +911,29 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("run") {
         info!("Run");
 
-        //let game = matches.value_of("GAME").unwrap().to_lowercase();
-        // let app = match game.as_str() {
-        //     "skyrim" => &util::apps::SKYRIM,
-        //     "skyrimse" | "skyrim special edition" => {
-        //         &util::apps::SKYRIM_SPECIAL_EDITION
-        //     },
-        //     _ => {
-        //         println!("Unknown game! Valid options are:");
-        //         for game in ["Skyrim", "SkyrimSE"] {
-        //             println!("\t{}", game);
-        //         }
-        //         return;
-        //     }
-        // };
-
-        let app = &util::apps::SKYRIM_SPECIAL_EDITION;
-
-        let install_dir = match get_install_dir(app) {
-            Some(dir) => dir,
+        let game = matches.value_of("GAME").unwrap().to_lowercase();
+        let app = match game.as_str() {
+            "skyrim" => &util::apps::SKYRIM,
+            "skyrimse" | "skyrim special edition" => {
+                &util::apps::SKYRIM_SPECIAL_EDITION
+            },
             _ => {
-                error!("game not installed!");
+                println!("Unknown game! Valid options are:");
+                for game in ["Skyrim", "SkyrimSE"] {
+                    println!("\t{}", game);
+                }
                 return;
             }
         };
 
-        // Mount folders
-        if let Err(e) = || -> Result<(), &'static str> {
-            info!("Mounting data dir");
-            mount_data_dir()?;
-            info!("Mounting configs dir");
-            mount_skyrim_configs_dir()?;
-            info!("Mounting appdata dir");
-            mount_skyrim_appdata_dir()
-        }() {
-            error!("{}", e);
-            return;
-        }
-
-        // Run the game
-        let executable = match app.mod_loader_executable {
-            Some(exe) => {
-                let path = install_dir.join(exe);
-                if path.exists() {
-                    path
-                } else {
-                    install_dir.join(app.executable)
-                }
-            }
-            _ => install_dir.join(app.executable),
+        let mut launcher = AppLauncher {
+            app,
+            mounted_paths: None,
         };
 
-        println!("Starting protontricks\n");
-        let mut protontricks = Command::new("protontricks")
-            .arg(app.appid.to_string())
-            .arg("shell")
-            .stdin(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        protontricks
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(
-                format!(
-                    "cd \"{}\" && wine \"{}\"\n",
-                    install_dir.display(),
-                    executable.display()
-                )
-                .as_bytes(),
-            )
-            .unwrap();
-        protontricks.wait().unwrap();
-        println!("Game stopped");
-
-        // Unmount folders
-        if let Err(e) = unmount_directory(&install_dir.join("Data")) {
-            warn!("{}", e);
+        if let Err(err) = launcher.run() {
+            error!("{}", err);
+            return;
         }
-
-        if let Err(e) = unmount_directory(&get_skyrim_config_dir().unwrap()) {
-            warn!("{}", e);
-        }
-
-        if let Err(e) = unmount_directory(&get_skyrim_appdata_dir().unwrap()) {
-            warn!("{}", e);
-        }
-
-        // Move folders back
-        std::fs::rename(install_dir.join("Data~"), install_dir.join("Data")).unwrap();
-        let configs_dir = get_skyrim_config_dir().unwrap();
-        std::fs::rename(
-            configs_dir
-                .parent()
-                .unwrap()
-                .join("Skyrim Special Edition~"),
-            configs_dir,
-        )
-        .unwrap();
-        let appdata_dir = get_skyrim_appdata_dir().unwrap();
-        std::fs::rename(
-            appdata_dir
-                .parent()
-                .unwrap()
-                .join("Skyrim Special Edition~"),
-            appdata_dir,
-        )
-        .unwrap();
     }
 }
