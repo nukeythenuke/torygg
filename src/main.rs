@@ -708,7 +708,7 @@ fn main() {
         .about("A mod manager for Skyrim Special Edition on linux")
         .arg(
             Arg::with_name("verbose")
-                .short("v")
+                .short('v')
                 .long("verbose")
                 .help("Enable verbose output"),
         )
