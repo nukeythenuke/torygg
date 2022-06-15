@@ -27,7 +27,7 @@ mod util {
         /// mod_loader_executable: eg. skse64_loader.exe
         #[derive(Debug)]
         pub struct SteamApp {
-            pub appid: isize,
+            pub appid: usize,
             pub install_dir: &'static str,
             pub executable: &'static str,
             pub mod_loader_executable: Option<&'static str>,
@@ -45,6 +45,18 @@ mod util {
             executable: "SkyrimSE.exe",
             mod_loader_executable: Some("skse64_loader.exe"),
         };
+
+        impl std::str::FromStr for &SteamApp {
+            type Err = anyhow::Error;
+
+            fn from_str(s: &str) -> std::result::Result<Self, <Self as std::str::FromStr>::Err> { 
+                Ok(match s {
+                    "skyrim" => &SKYRIM,
+                    "skyrimse" => &SKYRIM_SPECIAL_EDITION,
+                    _ => anyhow::bail!("Unknown game \"{s}\"")
+                })
+             }
+        }
     }
 
     pub fn get_libraryfolders_vdf() -> PathBuf {
@@ -759,7 +771,7 @@ enum Subcommands {
     Run {
         /// the game to launch
         #[clap(short, long)]
-        game: String,
+        game: &'static util::apps::SteamApp,
     },
 
     /// view the contents of the overwrite directory
@@ -881,21 +893,8 @@ fn main() {
         },
 
         Subcommands::Run { game } => {
-            info!("Run");
-
-            let app = match game.as_str() {
-                "skyrim" => &util::apps::SKYRIM,
-                "skyrimse" | "skyrim special edition" => &util::apps::SKYRIM_SPECIAL_EDITION,
-                _ => {
-                    println!("Unknown game! Valid options are:");
-                    for game in ["Skyrim", "SkyrimSE"] {
-                        println!("\t{}", game);
-                    }
-                    return;
-                }
-            };
-
-            let mut launcher = AppLauncher::new(app);
+            info!("Running the game");
+            let mut launcher = AppLauncher::new(game);
 
             if let Err(err) = launcher.run() {
                 error!("{}", err);
