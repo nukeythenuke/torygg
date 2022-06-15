@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg, SubCommand};
+use clap::{Parser, Subcommand};
 use log::{error, info};
 use simplelog::TermLogger;
 use std::collections::HashMap;
@@ -701,89 +701,76 @@ impl Drop for AppLauncher {
     }
 }
 
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Cli {
+    #[clap(short, long, action)]
+    verbose: bool,
+
+    #[clap(subcommand)]
+    subcommand: Subcommands
+}
+
+#[derive(Subcommand)]
+enum Subcommands {
+    /// list installed / active mods
+    Mods,
+
+    /// install a mod from an archive
+    Install {
+        /// mod archive to install
+        #[clap(short, long)]
+        archive: PathBuf,
+
+        /// the name of the installed mod
+        #[clap(short, long)]
+        name: String,
+    },
+
+    /// uninstall a mod
+    Uninstall {
+        /// name of mod to uninstall
+        #[clap(short, long)]
+        name: String,
+    },
+
+    /// activate a mod
+    Activate {
+        /// name of mod to activate
+        #[clap(short, long)]
+        name: String,
+    },
+
+    /// deactivate a mod
+    Deactivate {
+        /// name of mod to deactivate
+        #[clap(short, long)]
+        name: String,
+    },
+
+    /// create a new, empty, mod
+    Create {
+        /// name of mod to create
+        #[clap(short, long)]
+        name: String,
+    },
+
+    /// launch the game with mods
+    Run {
+        /// the game to launch
+        #[clap(short, long)]
+        game: String,
+    },
+
+    /// view the contents of the overwrite directory
+    Overwrite,
+}
+
 fn main() {
-    let matches = App::new(APP_NAME)
-        .version(crate_version!())
-        .author("Norman McKeown")
-        .about("A mod manager for Skyrim Special Edition on linux")
-        .arg(
-            Arg::with_name("verbose")
-                .short('v')
-                .long("verbose")
-                .help("Enable verbose output"),
-        )
-        .subcommand(SubCommand::with_name("mods").about("List installed / active mods"))
-        .subcommand(
-            SubCommand::with_name("install")
-                .about("Install a mod from an archive")
-                .arg(
-                    Arg::with_name("ARCHIVE")
-                        .help("Mod archive to install")
-                        .required(true)
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("NAME")
-                        .help("Set the name of the installed mod")
-                        .required(true)
-                        .index(2),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("uninstall")
-                .about("Uninstall the given mod")
-                .arg(
-                    Arg::with_name("name")
-                        .help("Mod to uninstall")
-                        .value_name("NAME")
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("activate")
-                .about("Activate the given mod")
-                .arg(
-                    Arg::with_name("NAME")
-                        .help("Mod to activate")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("deactivate")
-                .about("Deactivate the given mod")
-                .arg(
-                    Arg::with_name("NAME")
-                        .help("Mod to activate")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create")
-                .about("Create a new mod with the given name")
-                .arg(
-                    Arg::with_name("NAME")
-                        .help("Mod to create")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("run")
-                .about("Launch the game with mods")
-                .arg(
-                    Arg::with_name("GAME")
-                        .help("Game to launch")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(SubCommand::with_name("overwrite").about("List contents of overwite directory"))
-        .get_matches();
+    let cli = Cli::parse();
 
     TermLogger::init(
-        if matches.is_present("verbose") {
+        if cli.verbose {
             simplelog::LevelFilter::Info
         } else {
             simplelog::LevelFilter::Warn
@@ -823,132 +810,97 @@ fn main() {
 
     let profile = &profiles[0];
 
-    if let Some(matches) = matches.subcommand_matches("install") {
-        info!("Install.");
-        let archive_path = Path::new(matches.value_of("ARCHIVE").unwrap());
-        info!("Archive => {:?}", archive_path);
-        let mod_name = match matches.value_of("NAME") {
-            Some(mod_name) => mod_name.to_string(),
-            _ => archive_path
-                .file_stem()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string(),
-        };
-        info!("Mod name => {}", mod_name);
+    match &cli.subcommand {
+        Subcommands::Mods => {
+            println!("Mods");
+            let mods = match get_installed_mods() {
+                Ok(mods) => mods.into_iter(),
+                Err(e) => {
+                    error!("{}", e);
+                    return;
+                }
+            };
 
-        if let Err(e) = install_mod_from_archive(Path::new(archive_path), &mod_name) {
-            error!("{}", e);
-            return;
-        }
+            let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
+                Ok(enabled) => {
+                    if enabled {
+                        "*"
+                    } else {
+                        ""
+                    }
+                }
+                Err(_) => "",
+            });
 
-        return;
-    }
+            let combined = mods.zip(statuses);
 
-    if let Some(matches) = matches.subcommand_matches("uninstall") {
-        info!("Uninstall.");
-
-        let mod_name = matches.value_of("name").unwrap().to_owned();
-
-        if let Err(e) = uninstall_mod(&mod_name) {
-            error!("{}", e);
-        }
-
-        return;
-    }
-
-    if let Some(matches) = matches.subcommand_matches("activate") {
-        info!("Activate.");
-
-        let mod_name = matches.value_of("NAME").unwrap().to_owned();
-        if let Err(e) = activate_mod(&get_active_profile(), &mod_name) {
-            error!("{}", e);
-        }
-
-        return;
-    }
-
-    if let Some(matches) = matches.subcommand_matches("deactivate") {
-        info!("Deactivate.");
-
-        let mod_name = matches.value_of("NAME").unwrap().to_owned();
-        if let Err(e) = deactivate_mod(&get_active_profile(), &mod_name) {
-            error!("{}", e);
-        }
-
-        return;
-    }
-
-    if let Some(matches) = matches.subcommand_matches("create") {
-        info!("Create.");
-
-        let mod_name = matches.value_of("NAME").unwrap().to_owned();
-        if let Err(e) = create_mod(&mod_name) {
-            error!("{}", e);
-        }
-
-        return;
-    }
-
-    if let Some(_matches) = matches.subcommand_matches("overwrite") {
-        for e in WalkDir::new(get_overwrite_dir().unwrap()).min_depth(1) {
-            println!("{}", e.unwrap().path().display());
-        }
-
-        return;
-    }
-
-    if let Some(_matches) = matches.subcommand_matches("mods") {
-        println!("Mods");
-        let mods = match get_installed_mods() {
-            Ok(mods) => mods.into_iter(),
-            Err(e) => {
+            for m in combined {
+                println!("{}{}", m.1, m.0)
+            }
+        },
+        Subcommands::Install { archive, name } => {
+            info!("Installing {} as {name}", archive.display());
+            if let Err(e) = install_mod_from_archive(&archive, &name) {
                 error!("{}", e);
                 return;
             }
-        };
+        },
 
-        let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
-            Ok(enabled) => {
-                if enabled {
-                    "*"
-                } else {
-                    ""
-                }
+        Subcommands::Uninstall { name } => {
+            info!("Uninstalling {name}");
+            if let Err(e) = uninstall_mod(&name) {
+                error!("{}", e);
             }
-            Err(_) => "",
-        });
+        },
 
-        let combined = mods.zip(statuses);
+        Subcommands::Activate { name } => {
+            info!("Activating {name}");
+            if let Err(e) = activate_mod(&get_active_profile(), &name) {
+                error!("{}", e);
+            } 
+        },
 
-        for m in combined {
-            println!("{}{}", m.1, m.0)
+        Subcommands::Deactivate { name } => {
+            info!("Deactivating {name}");
+            if let Err(e) = deactivate_mod(&get_active_profile(), &name) {
+                error!("{}", e);
+            }
         }
 
-        return;
-    }
-
-    if let Some(matches) = matches.subcommand_matches("run") {
-        info!("Run");
-
-        let game = matches.value_of("GAME").unwrap().to_lowercase();
-        let app = match game.as_str() {
-            "skyrim" => &util::apps::SKYRIM,
-            "skyrimse" | "skyrim special edition" => &util::apps::SKYRIM_SPECIAL_EDITION,
-            _ => {
-                println!("Unknown game! Valid options are:");
-                for game in ["Skyrim", "SkyrimSE"] {
-                    println!("\t{}", game);
-                }
-                return;
+        Subcommands::Create { name } => {
+            info!("Creating new mod with name: {name}");
+            if let Err(e) = create_mod(&name) {
+                error!("{}", e);
             }
-        };
-
-        let mut launcher = AppLauncher::new(app);
-
-        if let Err(err) = launcher.run() {
-            error!("{}", err);
         }
+
+        Subcommands::Overwrite => {
+            info!("Listing overwrite directory contents");
+            for e in WalkDir::new(get_overwrite_dir().unwrap()).min_depth(1) {
+                println!("{}", e.unwrap().path().display());
+            }
+        },
+
+        Subcommands::Run { game } => {
+            info!("Run");
+
+            let app = match game.as_str() {
+                "skyrim" => &util::apps::SKYRIM,
+                "skyrimse" | "skyrim special edition" => &util::apps::SKYRIM_SPECIAL_EDITION,
+                _ => {
+                    println!("Unknown game! Valid options are:");
+                    for game in ["Skyrim", "SkyrimSE"] {
+                        println!("\t{}", game);
+                    }
+                    return;
+                }
+            };
+
+            let mut launcher = AppLauncher::new(app);
+
+            if let Err(err) = launcher.run() {
+                error!("{}", err);
+            }
+        },
     }
 }

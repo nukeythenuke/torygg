@@ -9,11 +9,9 @@ edition = "2021"
 [dependencies]
 torygg-vdf = { git = "https://github.com/nukeythenuke/torygg-vdf" }
 
-clap = { version = "3", features = ["cargo"] }
+clap = { version = "3", features = ["derive"] }
 dirs = "4"
 log = "0.4"
 simplelog = "0.12"
 tempfile = "3"
 walkdir = "2"
-
-#esplugin = "3.2.0"
