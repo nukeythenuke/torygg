@@ -840,36 +840,35 @@ fn main() {
         },
         Subcommands::Install { archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            if let Err(e) = install_mod_from_archive(&archive, &name) {
+            if let Err(e) = install_mod_from_archive(archive, name) {
                 error!("{}", e);
-                return;
             }
         },
 
         Subcommands::Uninstall { name } => {
             info!("Uninstalling {name}");
-            if let Err(e) = uninstall_mod(&name) {
+            if let Err(e) = uninstall_mod(name) {
                 error!("{}", e);
             }
         },
 
         Subcommands::Activate { name } => {
             info!("Activating {name}");
-            if let Err(e) = activate_mod(&get_active_profile(), &name) {
+            if let Err(e) = activate_mod(&get_active_profile(), name) {
                 error!("{}", e);
             } 
         },
 
         Subcommands::Deactivate { name } => {
             info!("Deactivating {name}");
-            if let Err(e) = deactivate_mod(&get_active_profile(), &name) {
+            if let Err(e) = deactivate_mod(&get_active_profile(), name) {
                 error!("{}", e);
             }
         }
 
         Subcommands::Create { name } => {
             info!("Creating new mod with name: {name}");
-            if let Err(e) = create_mod(&name) {
+            if let Err(e) = create_mod(name) {
                 error!("{}", e);
             }
         }
