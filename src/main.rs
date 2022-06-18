@@ -727,7 +727,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Subcommands {
     /// list installed / active mods
-    Mods {
+    ListMods {
         /// profile to show active mods from
         #[clap(long)]
         profile: Option<String>,
@@ -838,7 +838,7 @@ fn main() {
     }
 
     match &cli.subcommand {
-        Subcommands::Mods { profile } => {
+        Subcommands::ListMods { profile } => {
             info!("Listing mods");
             println!("Mods");
             let mods = match get_installed_mods() {
