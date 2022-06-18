@@ -233,13 +233,12 @@ fn get_profiles() -> Result<Vec<String>, &'static str> {
         .collect())
 }
 
-fn create_profile(profiles: &mut Vec<String>, profile_name: &str) -> Result<(), &'static str> {
+fn create_profile(profile_name: &str) -> Result<(), &'static str> {
     let path = get_profiles_dir()?.join(profile_name);
     if path.exists() {
         Err("Profile already exists!")
     } else {
         verify_directory(&path)?;
-        profiles.push(profile_name.to_owned());
         Ok(())
     }
 }
@@ -435,10 +434,6 @@ fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
     Ok(dir)
 }
 
-fn get_active_profile() -> String {
-    std::env::var("TORYGG_PROFILE").unwrap_or_else(|_| String::from("Default"))
-}
-
 fn get_profiles_dir() -> Result<PathBuf, &'static str> {
     let dir = get_data_dir()?.join(PROFILES_SUBDIR);
     verify_directory(&dir)?;
@@ -463,15 +458,17 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
     Ok(dir)
 }
 
-struct AppLauncher {
+struct AppLauncher<'a> {
     app: &'static util::apps::SteamApp,
+    profile: &'a str,
     mounted_paths: Vec<PathBuf>,
 }
 
-impl AppLauncher {
-    fn new(app: &'static util::apps::SteamApp) -> Self {
+impl<'a> AppLauncher<'a> {
+    fn new(app: &'static util::apps::SteamApp, profile: &'a str) -> Self {
         AppLauncher {
             app,
+            profile,
             mounted_paths: Vec::new(),
         }
     }
@@ -552,7 +549,7 @@ impl AppLauncher {
         let data_path = install_path.join("Data");
 
         let mods_path = get_mods_dir()?;
-        let mut mod_paths = get_active_mods(&get_active_profile())?
+        let mut mod_paths = get_active_mods(self.profile)?
             .into_iter()
             .map(|m| mods_path.join(m))
             .collect::<Vec<_>>();
@@ -698,7 +695,7 @@ impl AppLauncher {
     }
 }
 
-impl Drop for AppLauncher {
+impl<'a> Drop for AppLauncher<'a> {
     fn drop(&mut self) {
         info!("AppLauncher dropped");
         // Unmount directories
@@ -716,8 +713,12 @@ impl Drop for AppLauncher {
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
-    #[clap(short, long, action)]
+    #[clap(short, long)]
     verbose: bool,
+
+    /// The game to operate on
+    #[clap(long)]
+    game: &'static util::apps::SteamApp,
 
     #[clap(subcommand)]
     subcommand: Subcommands
@@ -726,56 +727,88 @@ struct Cli {
 #[derive(Subcommand)]
 enum Subcommands {
     /// list installed / active mods
-    Mods,
+    Mods {
+        /// profile to show active mods from
+        #[clap(long)]
+        profile: Option<String>,
+    },
 
     /// install a mod from an archive
     Install {
         /// mod archive to install
-        #[clap(short, long)]
+        #[clap(long)]
         archive: PathBuf,
 
         /// the name of the installed mod
-        #[clap(short, long)]
+        #[clap(long)]
         name: String,
     },
 
     /// uninstall a mod
     Uninstall {
         /// name of mod to uninstall
-        #[clap(short, long)]
+        #[clap(long)]
         name: String,
     },
 
     /// activate a mod
     Activate {
+        /// profile to activate the mod on
+        #[clap(long)]
+        profile: String,
+
         /// name of mod to activate
-        #[clap(short, long)]
+        #[clap(long)]
         name: String,
     },
 
     /// deactivate a mod
     Deactivate {
+        /// profile to deactivate the mod on
+        #[clap(long)]
+        profile: String,
+
         /// name of mod to deactivate
-        #[clap(short, long)]
+        #[clap(long)]
         name: String,
     },
 
     /// create a new, empty, mod
-    Create {
+    CreateMod {
         /// name of mod to create
-        #[clap(short, long)]
+        #[clap(long)]
+        name: String,
+    },
+
+    ListProfiles,
+
+    /// create a new profile
+    CreateProfile {
+        /// name of the profile to create
+        #[clap(long)]
+        name: String,
+    },
+
+    /// delete a profile
+    DeleteProfile {
+        /// name of the profile to delete
+        #[clap(long)]
         name: String,
     },
 
     /// launch the game with mods
     Run {
-        /// the game to launch
-        #[clap(short, long)]
-        game: &'static util::apps::SteamApp,
+        /// profile to run
+        #[clap(long)]
+        profile: String,
     },
 
     /// view the contents of the overwrite directory
-    Overwrite,
+    Overwrite {
+        /// profile which to show the overwrite directory of
+        #[clap(long)]
+        profile: String,
+    },
 }
 
 fn main() {
@@ -804,26 +837,9 @@ fn main() {
         return;
     }
 
-    // Get profiles, create a default profile if none exist
-    let profiles = match || -> Result<Vec<String>, &'static str> {
-        let mut profiles = get_profiles()?;
-        if profiles.is_empty() {
-            create_profile(&mut profiles, "Default")?;
-        }
-
-        Ok(profiles)
-    }() {
-        Ok(profiles) => profiles,
-        Err(e) => {
-            error!("{}", e);
-            return;
-        }
-    };
-
-    let profile = &profiles[0];
-
     match &cli.subcommand {
-        Subcommands::Mods => {
+        Subcommands::Mods { profile } => {
+            info!("Listing mods");
             println!("Mods");
             let mods = match get_installed_mods() {
                 Ok(mods) => mods.into_iter(),
@@ -833,22 +849,32 @@ fn main() {
                 }
             };
 
-            let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
-                Ok(enabled) => {
-                    if enabled {
-                        "*"
-                    } else {
-                        ""
+            match profile {
+                Some(profile) => {
+                    let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
+                        Ok(enabled) => {
+                            if enabled {
+                                "*"
+                            } else {
+                                ""
+                            }
+                        }
+                        Err(_) => "",
+                    });
+        
+                    let combined = mods.zip(statuses);
+        
+                    for m in combined {
+                        println!("{}{}", m.1, m.0)
+                    }
+                },
+                None => {
+                    for m in mods {
+                        println!("{m}")
                     }
                 }
-                Err(_) => "",
-            });
-
-            let combined = mods.zip(statuses);
-
-            for m in combined {
-                println!("{}{}", m.1, m.0)
             }
+            
         },
         Subcommands::Install { archive, name } => {
             info!("Installing {} as {name}", archive.display());
@@ -864,37 +890,68 @@ fn main() {
             }
         },
 
-        Subcommands::Activate { name } => {
+        Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
-            if let Err(e) = activate_mod(&get_active_profile(), name) {
+            if let Err(e) = activate_mod(profile, name) {
                 error!("{}", e);
             } 
         },
 
-        Subcommands::Deactivate { name } => {
+        Subcommands::Deactivate { profile, name } => {
             info!("Deactivating {name}");
-            if let Err(e) = deactivate_mod(&get_active_profile(), name) {
+            if let Err(e) = deactivate_mod(profile, name) {
                 error!("{}", e);
             }
-        }
+        },
 
-        Subcommands::Create { name } => {
+        Subcommands::CreateMod { name } => {
             info!("Creating new mod with name: {name}");
             if let Err(e) = create_mod(name) {
                 error!("{}", e);
             }
+        },
+
+        Subcommands::ListProfiles => {
+            info!("Listing profiles");
+            match get_profiles() {
+                Ok(profiles) => {
+                    for profile in profiles {
+                        println!("{profile}")
+                    }
+                },
+                Err(e) => error!("{e}")
+            }
+        },
+
+        Subcommands::CreateProfile { name } => {
+            info!("Creating a profile with name: {name}");
+            if let Err(e) = create_profile(name) {
+                error!("{e}");
+            }
+        },
+
+        Subcommands::DeleteProfile { name } => {
+            info!("Deleting profile with name: {name}");
+            match || -> anyhow::Result<()> {
+                let dir = get_profile_dir(name).unwrap();
+                std::fs::remove_dir_all(dir)?;
+                Ok(())
+            }() {
+                Ok(_) => (),
+                Err(e) => error!("{e}")
+            }
         }
 
-        Subcommands::Overwrite => {
+        Subcommands::Overwrite { /*profile*/ .. } => {
             info!("Listing overwrite directory contents");
             for e in WalkDir::new(get_overwrite_dir().unwrap()).min_depth(1) {
                 println!("{}", e.unwrap().path().display());
             }
         },
 
-        Subcommands::Run { game } => {
+        Subcommands::Run { profile } => {
             info!("Running the game");
-            let mut launcher = AppLauncher::new(game);
+            let mut launcher = AppLauncher::new(cli.game, profile);
 
             if let Err(err) = launcher.run() {
                 error!("{}", err);
