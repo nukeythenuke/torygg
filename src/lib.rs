@@ -201,31 +201,6 @@ pub mod util {
 
         None
     }
-
-    pub fn get_install_dir(app: &games::SteamApp) -> Option<PathBuf> {
-        let path = get_steam_library(app)?
-            .join("steamapps/common")
-            .join(app.install_dir);
-
-        if path.exists() {
-            Some(path)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_wine_prefix(app: &games::SteamApp) -> Option<PathBuf> {
-        let path = get_steam_library(app)?
-            .join("steamapps/compatdata")
-            .join(app.appid.to_string())
-            .join("pfx");
-
-        if path.exists() {
-            Some(path)
-        } else {
-            None
-        }
-    }
 }
 
 pub fn verify_directory(path: &Path) -> Result<(), &'static str> {
