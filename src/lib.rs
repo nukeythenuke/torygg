@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use log::{error, info};
+use log::error;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::games::Game;
@@ -55,13 +55,13 @@ pub mod games {
     }
 
     /// appid: Steam app id
-    /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
+    /// name: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
     /// executable: game executable
     /// mod_loader_executable: eg. skse64_loader.exe
     #[derive(Debug)]
     pub struct SteamApp {
         pub appid: usize,
-        pub install_dir: &'static str,
+        pub name: &'static str,
         pub executable: &'static str,
         pub mod_loader_executable: Option<&'static str>,
     }
@@ -70,7 +70,7 @@ pub mod games {
         fn get_install_dir(&self) -> Option<PathBuf> {
             let path = util::get_steam_library(self)?
                 .join("steamapps/common")
-                .join(self.install_dir);
+                .join(self.name);
 
             if path.exists() {
                 Some(path)
@@ -100,7 +100,7 @@ pub mod games {
         }
 
         fn get_name(&self) -> &'static str {
-            self.install_dir
+            self.name
         }
 
         fn run(&self) -> Result<(), &'static str> {
@@ -150,13 +150,13 @@ pub mod games {
 
     pub const SKYRIM: SteamApp = SteamApp {
         appid: 72850,
-        install_dir: "Skyrim",
+        name: "Skyrim",
         executable: "Skyrim.exe",
         mod_loader_executable: None,
     };
     pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
         appid: 489830,
-        install_dir: "Skyrim Special Edition",
+        name: "Skyrim Special Edition",
         executable: "SkyrimSE.exe",
         mod_loader_executable: Some("skse64_loader.exe"),
     };
