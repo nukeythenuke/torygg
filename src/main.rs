@@ -22,9 +22,8 @@ use torygg::{
     install_mod_from_archive,
     is_mod_active,
     uninstall_mod,
-    util,
-    verify_directory
-};
+    verify_directory,
+    games};
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -34,7 +33,7 @@ struct Cli {
 
     /// The game to operate on
     #[clap(long)]
-    game: &'static util::apps::SteamApp,
+    game: &'static games::SteamApp,
 
     #[clap(subcommand)]
     subcommand: Subcommands

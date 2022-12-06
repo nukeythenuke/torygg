@@ -15,53 +15,55 @@ static MODS_SUBDIR: &str = "Mods";
 static OVERWRITE_SUBDIR: &str = "Overwrite";
 static PROFILES_SUBDIR: &str = "Profiles";
 
-pub mod util {
-    use std::{fs::File, iter::FromIterator, path::PathBuf};
+pub mod games {
+    /// appid: Steam app id
+    /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
+    /// executable: game executable
+    /// mod_loader_executable: eg. skse64_loader.exe
+    #[derive(Debug)]
+    pub struct SteamApp {
+        pub appid: usize,
+        pub install_dir: &'static str,
+        pub executable: &'static str,
+        pub mod_loader_executable: Option<&'static str>,
+    }
 
-    pub mod apps {
-        /// appid: Steam app id
-        /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
-        /// executable: game executable
-        /// mod_loader_executable: eg. skse64_loader.exe
-        #[derive(Debug)]
-        pub struct SteamApp {
-            pub appid: usize,
-            pub install_dir: &'static str,
-            pub executable: &'static str,
-            pub mod_loader_executable: Option<&'static str>,
-        }
+    pub const SKYRIM: SteamApp = SteamApp {
+        appid: 72850,
+        install_dir: "Skyrim",
+        executable: "Skyrim.exe",
+        mod_loader_executable: None,
+    };
+    pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
+        appid: 489830,
+        install_dir: "Skyrim Special Edition",
+        executable: "SkyrimSE.exe",
+        mod_loader_executable: Some("skse64_loader.exe"),
+    };
 
-        pub const SKYRIM: SteamApp = SteamApp {
-            appid: 72850,
-            install_dir: "Skyrim",
-            executable: "Skyrim.exe",
-            mod_loader_executable: None,
-        };
-        pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
-            appid: 489830,
-            install_dir: "Skyrim Special Edition",
-            executable: "SkyrimSE.exe",
-            mod_loader_executable: Some("skse64_loader.exe"),
-        };
+    impl std::str::FromStr for &SteamApp {
+        type Err = anyhow::Error;
 
-        impl std::str::FromStr for &SteamApp {
-            type Err = anyhow::Error;
-
-            fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
-                Ok(match s {
-                    "skyrim" => &SKYRIM,
-                    "skyrimse" => &SKYRIM_SPECIAL_EDITION,
-                    _ => anyhow::bail!("Unknown game \"{s}\"")
-                })
-            }
+        fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
+            Ok(match s {
+                "skyrim" => &SKYRIM,
+                "skyrimse" => &SKYRIM_SPECIAL_EDITION,
+                _ => anyhow::bail!("Unknown game \"{s}\"")
+            })
         }
     }
+}
+
+pub mod util {
+    use std::{fs::File, iter::FromIterator, path::PathBuf};
+    use crate::games;
+
 
     pub fn get_libraryfolders_vdf() -> PathBuf {
         PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
     }
 
-    fn get_steam_library(app: &apps::SteamApp) -> Option<PathBuf> {
+    fn get_steam_library(app: &games::SteamApp) -> Option<PathBuf> {
         let vdf = get_libraryfolders_vdf();
         let mut file = File::open(vdf).ok()?;
         let kvs = torygg_vdf::parse(&mut file).ok()?;
@@ -83,7 +85,7 @@ pub mod util {
         None
     }
 
-    pub fn get_install_dir(app: &apps::SteamApp) -> Option<PathBuf> {
+    pub fn get_install_dir(app: &games::SteamApp) -> Option<PathBuf> {
         let path = get_steam_library(app)?
             .join("steamapps/common")
             .join(app.install_dir);
@@ -95,7 +97,7 @@ pub mod util {
         }
     }
 
-    pub fn get_wine_prefix(app: &apps::SteamApp) -> Option<PathBuf> {
+    pub fn get_wine_prefix(app: &games::SteamApp) -> Option<PathBuf> {
         let path = get_steam_library(app)?
             .join("steamapps/compatdata")
             .join(app.appid.to_string())
@@ -380,7 +382,7 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
         }
         None => {
             let err = Err("wine user dir not found");
-            let mut path = util::get_wine_prefix(&util::apps::SKYRIM_SPECIAL_EDITION)
+            let mut path = util::get_wine_prefix(&games::SKYRIM_SPECIAL_EDITION)
                 .ok_or("skyrim install dir not found")?;
             path.push("drive_c/users");
             let steamuser = path.join("steamuser");
@@ -402,12 +404,12 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
     }
 }
 
-fn get_config_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
+fn get_config_dir(app: &games::SteamApp) -> Result<PathBuf, &'static str> {
     Ok(get_wine_user_dir()?.join(String::from("My Documents/My Games/") + app.install_dir))
 }
 
 // Folder where profile Plugins.txt is kept
-fn get_appdata_dir(app: &util::apps::SteamApp) -> Result<PathBuf, &'static str> {
+fn get_appdata_dir(app: &games::SteamApp) -> Result<PathBuf, &'static str> {
     Ok(get_wine_user_dir()?
         .join(String::from("Local Settings/Application Data/") + app.install_dir))
 }
@@ -457,13 +459,13 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
 }
 
 pub struct AppLauncher<'a> {
-    app: &'static util::apps::SteamApp,
+    app: &'static games::SteamApp,
     profile: &'a str,
     mounted_paths: Vec<PathBuf>,
 }
 
 impl<'a> AppLauncher<'a> {
-    pub fn new(app: &'static util::apps::SteamApp, profile: &'a str) -> Self {
+    pub fn new(app: &'static games::SteamApp, profile: &'a str) -> Self {
         AppLauncher {
             app,
             profile,
