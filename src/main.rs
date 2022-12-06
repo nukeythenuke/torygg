@@ -147,7 +147,8 @@ fn main() {
         verify_directory(&get_data_dir()?)?;
         verify_directory(&get_mods_dir()?)?;
         verify_directory(&get_overwrite_dir()?)?;
-        verify_directory(&get_profiles_dir()?)
+        verify_directory(&get_profiles_dir()?)?;
+        verify_directory(&get_data_dir()?.join("Configs"))
     }() {
         error!("{}", e);
         return;
