@@ -27,6 +27,15 @@ pub mod wine {
 }
 
 pub mod games {
+    use std::path::PathBuf;
+    use crate::wine::Prefix;
+
+    pub trait Game {
+        fn get_install_dir() -> PathBuf;
+        fn get_executable() -> PathBuf;
+        fn get_wine_pfx() -> Prefix;
+    }
+
     /// appid: Steam app id
     /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
     /// executable: game executable
