@@ -15,6 +15,17 @@ static MODS_SUBDIR: &str = "Mods";
 static OVERWRITE_SUBDIR: &str = "Overwrite";
 static PROFILES_SUBDIR: &str = "Profiles";
 
+pub mod wine {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    pub struct Prefix {
+        wine_exec: PathBuf,
+        pfx: PathBuf,
+        env: HashMap<String, String>,
+    }
+}
+
 pub mod games {
     /// appid: Steam app id
     /// install_dir: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
@@ -57,7 +68,6 @@ pub mod games {
 pub mod util {
     use std::{fs::File, iter::FromIterator, path::PathBuf};
     use crate::games;
-
 
     pub fn get_libraryfolders_vdf() -> PathBuf {
         PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
