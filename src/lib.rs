@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use log::{error, info};
 use tempfile::TempDir;
 use walkdir::WalkDir;
-
-use crate::util::get_install_dir;
+use crate::games::Game;
 
 static APP_NAME: &str = "torygg";
 
@@ -20,9 +18,9 @@ pub mod wine {
     use std::path::PathBuf;
 
     pub struct Prefix {
-        wine_exec: PathBuf,
-        pfx: PathBuf,
-        env: HashMap<String, String>,
+        pub wine_exec: PathBuf,
+        pub pfx: PathBuf,
+        pub env: HashMap<String, String>,
     }
 
     impl Prefix {
@@ -39,15 +37,19 @@ pub mod wine {
 }
 
 pub mod games {
+    use std::io::Write;
     use std::path::PathBuf;
+    use std::process::{Command, Stdio};
+    use log::info;
     use crate::util;
-    use crate::util::get_install_dir;
     use crate::wine::Prefix;
 
     pub trait Game {
         fn get_install_dir(&self) -> Option<PathBuf>;
         fn get_executable(&self) -> Option<PathBuf>;
         fn get_wine_pfx(&self) -> Option<Prefix>;
+        fn get_name(&self) -> &'static str;
+        fn run(&self) -> Result<(), &'static str>;
     }
 
     /// appid: Steam app id
@@ -74,9 +76,8 @@ pub mod games {
                 None
             }
         }
-
         fn get_executable(&self) -> Option<PathBuf> {
-            let install_dir = get_install_dir(self)?;
+            let install_dir = self.get_install_dir()?;
             if let Some(mle) = self.mod_loader_executable {
                 let mle_path = install_dir.join(mle);
                 if mle_path.exists() {
@@ -94,6 +95,54 @@ pub mod games {
                 .join("pfx");
 
             Some(Prefix::new(path))
+        }
+
+        fn get_name(&self) -> &'static str {
+            self.install_dir
+        }
+
+        fn run(&self) -> Result<(), &'static str> {
+            let install_dir = self.get_install_dir().unwrap();
+            let executable = self.get_executable().unwrap();
+
+            info!("Starting protontricks");
+            let mut cmd = Command::new("protontricks");
+            cmd.arg(self.appid.to_string());
+            cmd.arg("shell");
+            cmd.stdin(Stdio::piped());
+
+            let mut child = match cmd.spawn() {
+                Ok(child) => child,
+                Err(_) => return Err("Failed to spawn child"),
+            };
+
+            if child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(
+                    format!(
+                        "cd \"{}\" && wine \"{}\"\n",
+                        install_dir.display(),
+                        executable.display()
+                    )
+                        .as_bytes(),
+                )
+                .is_err()
+            {
+                return Err("failed to write to child");
+            }
+
+            let status = match child.wait() {
+                Ok(status) => status,
+                Err(_) => return Err("Child failed"),
+            };
+
+            if !status.success() {
+                return Err("Child failed");
+            }
+
+            Ok(())
         }
     }
 
@@ -450,8 +499,10 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
         }
         None => {
             let err = Err("wine user dir not found");
-            let mut path = util::get_wine_prefix(&games::SKYRIM_SPECIAL_EDITION)
-                .ok_or("skyrim install dir not found")?;
+            let path = (games::SKYRIM_SPECIAL_EDITION).get_wine_pfx()
+                .ok_or("skyrim install dir not found")?
+                .pfx;
+            let mut path = path.clone();
             path.push("drive_c/users");
             let steamuser = path.join("steamuser");
             if steamuser.exists() {
@@ -472,14 +523,14 @@ fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
     }
 }
 
-fn get_config_dir(app: &games::SteamApp) -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?.join(String::from("My Documents/My Games/") + app.install_dir))
+fn get_config_dir(game: &dyn Game) -> Result<PathBuf, &'static str> {
+    Ok(get_wine_user_dir()?.join(String::from("My Documents/My Games/") + game.get_name()))
 }
 
 // Folder where profile Plugins.txt is kept
-fn get_appdata_dir(app: &games::SteamApp) -> Result<PathBuf, &'static str> {
+fn get_appdata_dir(game: &dyn Game) -> Result<PathBuf, &'static str> {
     Ok(get_wine_user_dir()?
-        .join(String::from("Local Settings/Application Data/") + app.install_dir))
+        .join(String::from("Local Settings/Application Data/") + game.get_name()))
 }
 
 pub fn get_data_dir() -> Result<PathBuf, &'static str> {
@@ -527,13 +578,13 @@ fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> 
 }
 
 pub struct AppLauncher<'a> {
-    app: &'static games::SteamApp,
+    app: &'static dyn Game,
     profile: &'a str,
     mounted_paths: Vec<PathBuf>,
 }
 
 impl<'a> AppLauncher<'a> {
-    pub fn new(app: &'static games::SteamApp, profile: &'a str) -> Self {
+    pub fn new(app: &'static dyn Game, profile: &'a str) -> Self {
         AppLauncher {
             app,
             profile,
@@ -609,9 +660,8 @@ impl<'a> AppLauncher<'a> {
         verify_directory(&work_path)?;
 
         // Mount data
-        let install_path = match get_install_dir(self.app) {
-            Some(path) => path,
-            None => return Err("Game not installed"),
+        let Some(install_path) = self.app.get_install_dir() else {
+            return Err("Game not installed")
         };
 
         let data_path = install_path.join("Data");
@@ -644,61 +694,11 @@ impl<'a> AppLauncher<'a> {
     pub fn run(&mut self) -> Result<(), &'static str> {
         self.mount_all()?;
 
-        // Launch the game and wait for it to close
-        // Check for presence of mod loader executable
-        let install_dir = get_install_dir(self.app).unwrap();
-        let executable = match self.app.mod_loader_executable {
-            Some(exe) => {
-                let path = install_dir.join(exe);
-                if path.exists() {
-                    path
-                } else {
-                    install_dir.join(self.app.executable)
-                }
-            }
-            _ => install_dir.join(self.app.executable),
-        };
-
-        info!("Starting protontricks");
-        let mut cmd = Command::new("protontricks");
-        cmd.arg(self.app.appid.to_string());
-        cmd.arg("shell");
-        cmd.stdin(Stdio::piped());
-
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(_) => return Err("Failed to spawn child"),
-        };
-
-        if child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(
-                format!(
-                    "cd \"{}\" && wine \"{}\"\n",
-                    install_dir.display(),
-                    executable.display()
-                )
-                    .as_bytes(),
-            )
-            .is_err()
-        {
-            return Err("failed to write to child");
-        }
-
-        let status = match child.wait() {
-            Ok(status) => status,
-            Err(_) => return Err("Child failed"),
-        };
-
-        if !status.success() {
-            return Err("Child failed");
-        }
+        let result = self.app.run();
 
         info!("Game stopped");
 
-        Ok(())
+        result
     }
 
     fn unmount_all(&mut self) -> Result<(), &'static str> {
