@@ -24,16 +24,30 @@ pub mod wine {
         pfx: PathBuf,
         env: HashMap<String, String>,
     }
+
+    impl Prefix {
+        pub fn new(pfx: PathBuf) -> Prefix {
+            Prefix {
+                // TODO: Find the correct wine executable
+                wine_exec: Default::default(),
+                pfx,
+                // TODO: Find the correct environment variables
+                env: Default::default(),
+            }
+        }
+    }
 }
 
 pub mod games {
     use std::path::PathBuf;
+    use crate::util;
+    use crate::util::get_install_dir;
     use crate::wine::Prefix;
 
     pub trait Game {
-        fn get_install_dir() -> PathBuf;
-        fn get_executable() -> PathBuf;
-        fn get_wine_pfx() -> Prefix;
+        fn get_install_dir(&self) -> Option<PathBuf>;
+        fn get_executable(&self) -> Option<PathBuf>;
+        fn get_wine_pfx(&self) -> Option<Prefix>;
     }
 
     /// appid: Steam app id
@@ -46,6 +60,41 @@ pub mod games {
         pub install_dir: &'static str,
         pub executable: &'static str,
         pub mod_loader_executable: Option<&'static str>,
+    }
+
+    impl Game for SteamApp {
+        fn get_install_dir(&self) -> Option<PathBuf> {
+            let path = util::get_steam_library(self)?
+                .join("steamapps/common")
+                .join(self.install_dir);
+
+            if path.exists() {
+                Some(path)
+            } else {
+                None
+            }
+        }
+
+        fn get_executable(&self) -> Option<PathBuf> {
+            let install_dir = get_install_dir(self)?;
+            if let Some(mle) = self.mod_loader_executable {
+                let mle_path = install_dir.join(mle);
+                if mle_path.exists() {
+                    return Some(mle_path);
+                }
+            }
+
+            Some(install_dir.join(self.executable))
+        }
+
+        fn get_wine_pfx(&self) -> Option<Prefix> {
+            let path = util::get_steam_library(self)?
+                .join("steamapps/compatdata")
+                .join(self.appid.to_string())
+                .join("pfx");
+
+            Some(Prefix::new(path))
+        }
     }
 
     pub const SKYRIM: SteamApp = SteamApp {
@@ -82,7 +131,7 @@ pub mod util {
         PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
     }
 
-    fn get_steam_library(app: &games::SteamApp) -> Option<PathBuf> {
+    pub fn get_steam_library(app: &games::SteamApp) -> Option<PathBuf> {
         let vdf = get_libraryfolders_vdf();
         let mut file = File::open(vdf).ok()?;
         let kvs = torygg_vdf::parse(&mut file).ok()?;
