@@ -49,7 +49,7 @@ mod util {
         impl std::str::FromStr for &SteamApp {
             type Err = anyhow::Error;
 
-            fn from_str(s: &str) -> std::result::Result<Self, <Self as std::str::FromStr>::Err> { 
+            fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
                 Ok(match s {
                     "skyrim" => &SKYRIM,
                     "skyrimse" => &SKYRIM_SPECIAL_EDITION,
@@ -170,9 +170,9 @@ fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &
             let to = install_path.join(relative_path);
 
             if from.is_dir() {
-                std::fs::create_dir(to).unwrap();
+                fs::create_dir(to).unwrap();
             } else {
-                std::fs::copy(from, to).unwrap();
+                fs::copy(from, to).unwrap();
             }
         }
 
@@ -498,14 +498,14 @@ impl<'a> AppLauncher<'a> {
         let lower_paths_string = lower_paths_string.to_string_lossy();
 
         // Move path to backup
-        let err = std::fs::rename(path, &backup_path).map_err(|_| "Failed to rename dir");
+        let err = fs::rename(path, &backup_path).map_err(|_| "Failed to rename dir");
         if err.is_err() {
             error!("Failed to rename {:?} to {:?}", path, backup_path);
         }
         err?;
 
         // Recreate path so we can mount on it
-        std::fs::create_dir(path).map_err(|_| "Failed to recreate dir")?;
+        fs::create_dir(path).map_err(|_| "Failed to recreate dir")?;
 
         let mut cmd = Command::new("fuse-overlayfs");
         cmd.arg("-o");
@@ -675,7 +675,7 @@ impl<'a> AppLauncher<'a> {
                 }
                 .join(last_component + "~");
 
-                if std::fs::rename(&backup_path, path).is_err() {
+                if fs::rename(&backup_path, path).is_err() {
                     error!("{}", err);
                 }
 
@@ -934,7 +934,7 @@ fn main() {
             info!("Deleting profile with name: {name}");
             match || -> anyhow::Result<()> {
                 let dir = get_profile_dir(name).unwrap();
-                std::fs::remove_dir_all(dir)?;
+                fs::remove_dir_all(dir)?;
                 Ok(())
             }() {
                 Ok(_) => (),
