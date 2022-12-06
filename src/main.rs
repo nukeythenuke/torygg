@@ -8,7 +8,6 @@ use walkdir::WalkDir;
 
 use torygg::{
     activate_mod,
-    AppLauncher,
     create_mod,
     create_profile,
     deactivate_mod,
@@ -23,7 +22,8 @@ use torygg::{
     is_mod_active,
     uninstall_mod,
     verify_directory,
-    games};
+    games,
+    applauncher::AppLauncher};
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
