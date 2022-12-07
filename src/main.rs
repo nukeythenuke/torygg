@@ -6,21 +6,7 @@ use log::{error, info};
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{
-    activate_mod,
-    create_mod,
-    create_profile,
-    deactivate_mod,
-    get_installed_mods,
-    get_profiles,
-    get_profile_dir,
-    install_mod_from_archive,
-    is_mod_active,
-    uninstall_mod,
-    util::verify_directory,
-    config,
-    games,
-    applauncher::AppLauncher};
+use torygg::{get_installed_mods, get_profiles, get_profile_dir, util::verify_directory, config, games, applauncher::AppLauncher, is_mod_active, Profile, install_mod_from_archive, uninstall_mod, activate_mod, deactivate_mod, create_mod, create_profile};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -42,7 +28,7 @@ enum Subcommands {
     ListMods {
         /// profile to show active mods from
         #[arg(long)]
-        profile: Option<String>,
+        profile: Profile,
     },
 
     /// install a mod from an archive
@@ -67,7 +53,7 @@ enum Subcommands {
     Activate {
         /// profile to activate the mod on
         #[arg(long)]
-        profile: String,
+        profile: Profile,
 
         /// name of mod to activate
         #[arg(long)]
@@ -78,7 +64,7 @@ enum Subcommands {
     Deactivate {
         /// profile to deactivate the mod on
         #[arg(long)]
-        profile: String,
+        profile: Profile,
 
         /// name of mod to deactivate
         #[arg(long)]
@@ -105,21 +91,21 @@ enum Subcommands {
     DeleteProfile {
         /// name of the profile to delete
         #[arg(long)]
-        name: String,
+        name: Profile,
     },
 
     /// launch the game with mods
     Run {
         /// profile to run
         #[arg(long)]
-        profile: String,
+        profile: Profile,
     },
 
     /// view the contents of the overwrite directory
     Overwrite {
         /// profile which to show the overwrite directory of
         #[arg(long)]
-        profile: String,
+        profile: Profile,
     },
 }
 
@@ -162,30 +148,21 @@ fn main() {
                 }
             };
 
-            match profile {
-                Some(profile) => {
-                    let statuses = mods.clone().map(|m| match is_mod_active(profile, &m) {
-                        Ok(enabled) => {
-                            if enabled {
-                                "*"
-                            } else {
-                                ""
-                            }
-                        }
-                        Err(_) => "",
-                    });
-        
-                    let combined = mods.zip(statuses);
-        
-                    for m in combined {
-                        println!("{}{}", m.1, m.0)
-                    }
-                },
-                None => {
-                    for m in mods {
-                        println!("{m}")
+            let statuses = mods.clone().map(|m| match is_mod_active(profile.get_name(), &m) {
+                Ok(enabled) => {
+                    if enabled {
+                        "*"
+                    } else {
+                        ""
                     }
                 }
+                Err(_) => "",
+            });
+        
+            let combined = mods.zip(statuses);
+        
+            for m in combined {
+                println!("{}{}", m.1, m.0)
             }
             
         },
@@ -205,14 +182,14 @@ fn main() {
 
         Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
-            if let Err(e) = activate_mod(profile, name) {
+            if let Err(e) = activate_mod(profile.get_name(), name) {
                 error!("{}", e);
             } 
         },
 
         Subcommands::Deactivate { profile, name } => {
             info!("Deactivating {name}");
-            if let Err(e) = deactivate_mod(profile, name) {
+            if let Err(e) = deactivate_mod(profile.get_name(), name) {
                 error!("{}", e);
             }
         },
@@ -229,7 +206,7 @@ fn main() {
             match get_profiles() {
                 Ok(profiles) => {
                     for profile in profiles {
-                        println!("{profile}")
+                        println!("{}", profile.get_name())
                     }
                 },
                 Err(e) => error!("{e}")
@@ -244,9 +221,9 @@ fn main() {
         },
 
         Subcommands::DeleteProfile { name } => {
-            info!("Deleting profile with name: {name}");
+            info!("Deleting profile with name: {}", name.get_name());
             match || -> anyhow::Result<()> {
-                let dir = get_profile_dir(name).unwrap();
+                let dir = get_profile_dir(name.get_name()).unwrap();
                 fs::remove_dir_all(dir)?;
                 Ok(())
             }() {
@@ -264,7 +241,7 @@ fn main() {
 
         Subcommands::Run { profile } => {
             info!("Running the game");
-            let mut launcher = AppLauncher::new(cli.game, profile);
+            let mut launcher = AppLauncher::new(cli.game, profile.get_name());
 
             if let Err(err) = launcher.run() {
                 error!("{}", err);

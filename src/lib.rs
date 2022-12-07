@@ -7,6 +7,7 @@ use std::fs;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use anyhow::anyhow;
 use log::error;
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -149,7 +150,7 @@ pub fn create_mod(mod_name: &str) -> Result<(), &'static str> {
 pub fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
     if is_mod_installed(mod_name)? {
         for p in get_profiles()? {
-            deactivate_mod(&p, mod_name).ok();
+            deactivate_mod(&p.get_name(), mod_name).ok();
         }
 
         fs::remove_file(get_mod_dir(mod_name).unwrap()).map_err(|_| "Failed to remove file")
@@ -179,14 +180,14 @@ fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
     Ok(get_installed_mods()?.contains(&mod_name.to_owned()))
 }
 
-pub fn get_profiles() -> Result<Vec<String>, &'static str> {
+pub fn get_profiles() -> Result<Vec<Profile>, &'static str> {
     Ok(fs::read_dir(config::get_profiles_dir()?)
         .map_err(|_| "Could not read profiles dir")?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             e.is_dir()
                 .then(|| ())
-                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
+                .and_then(|_| Profile::from_dir(e).ok())
         })
         .collect())
 }
@@ -328,6 +329,7 @@ pub fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'stati
     Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
+#[derive(Clone)]
 pub struct Profile {
     name: String,
     // Mod name, enabled
@@ -348,6 +350,20 @@ impl DerefMut for Profile {
     }
 }
 
+impl std::str::FromStr for Profile {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for profile in get_profiles().map_err(|e| anyhow!(e))? {
+            if profile.get_name() == s {
+                return Ok(profile)
+            }
+        }
+
+        Err(anyhow!("Profile not found"))
+    }
+}
+
 impl Profile {
     fn new(profile_name: &str) -> Result<Profile, &'static str> {
         let path = config::get_profiles_dir()?.join(profile_name);
@@ -357,6 +373,10 @@ impl Profile {
             verify_directory(&path)?;
             Ok(Profile { name: profile_name.to_string(), mods: HashMap::new() })
         }
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
     }
                                // Enabled, plugins
     fn read_meta(path: &Path) -> (bool, Vec<String>) {
