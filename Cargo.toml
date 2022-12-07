@@ -19,7 +19,7 @@ path = "src/main.rs"
 torygg-vdf = { git = "https://github.com/nukeythenuke/torygg-vdf" }
 
 anyhow = "1"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 dirs = "4"
 log = "0.4"
 simplelog = "0.12"

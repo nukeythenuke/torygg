@@ -23,16 +23,16 @@ use torygg::{
     applauncher::AppLauncher};
 
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 struct Cli {
-    #[clap(short, long)]
+    #[arg(short, long)]
     verbose: bool,
 
     /// The game to operate on
-    #[clap(long)]
+    #[arg(long)]
     game: &'static games::SteamApp,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcommand: Subcommands
 }
 
@@ -41,54 +41,54 @@ enum Subcommands {
     /// list installed / active mods
     ListMods {
         /// profile to show active mods from
-        #[clap(long)]
+        #[arg(long)]
         profile: Option<String>,
     },
 
     /// install a mod from an archive
     Install {
         /// mod archive to install
-        #[clap(long)]
+        #[arg(long)]
         archive: PathBuf,
 
         /// the name of the installed mod
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// uninstall a mod
     Uninstall {
         /// name of mod to uninstall
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// activate a mod
     Activate {
         /// profile to activate the mod on
-        #[clap(long)]
+        #[arg(long)]
         profile: String,
 
         /// name of mod to activate
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// deactivate a mod
     Deactivate {
         /// profile to deactivate the mod on
-        #[clap(long)]
+        #[arg(long)]
         profile: String,
 
         /// name of mod to deactivate
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// create a new, empty, mod
     CreateMod {
         /// name of mod to create
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
@@ -97,28 +97,28 @@ enum Subcommands {
     /// create a new profile
     CreateProfile {
         /// name of the profile to create
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// delete a profile
     DeleteProfile {
         /// name of the profile to delete
-        #[clap(long)]
+        #[arg(long)]
         name: String,
     },
 
     /// launch the game with mods
     Run {
         /// profile to run
-        #[clap(long)]
+        #[arg(long)]
         profile: String,
     },
 
     /// view the contents of the overwrite directory
     Overwrite {
         /// profile which to show the overwrite directory of
-        #[clap(long)]
+        #[arg(long)]
         profile: String,
     },
 }
