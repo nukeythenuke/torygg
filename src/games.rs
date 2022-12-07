@@ -5,17 +5,19 @@ use log::info;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use crate::error::ToryggError;
+use crate::error::ToryggError::DirectoryNotFound;
 
 pub trait Game {
-    fn get_install_dir(&self) -> Option<PathBuf>;
-    fn get_executable(&self) -> Option<PathBuf>;
-    fn get_wine_pfx(&self) -> Option<Prefix>;
+    fn get_install_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn get_executable(&self) -> Result<PathBuf, ToryggError>;
+    fn get_wine_pfx(&self) -> Result<Prefix, ToryggError>;
     fn get_name(&self) -> &'static str;
-    fn run(&self) -> Result<(), &'static str>;
-    fn get_wine_user_dir(&self) -> Result<PathBuf, &'static str>;
-    fn get_config_dir(&self) -> Result<PathBuf, &'static str>;
+    fn run(&self) -> Result<(), ToryggError>;
+    fn get_wine_user_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn get_config_dir(&self) -> Result<PathBuf, ToryggError>;
     // Folder where profile Plugins.txt is kept
-    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str>;
+    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError>;
 }
 
 /// appid: Steam app id
@@ -31,43 +33,47 @@ pub struct SteamApp {
 }
 
 impl Game for SteamApp {
-    fn get_install_dir(&self) -> Option<PathBuf> {
+    fn get_install_dir(&self) -> Result<PathBuf, ToryggError> {
         let path = util::get_steam_library(self)?
             .join("steamapps/common")
             .join(self.name);
 
         if path.exists() {
-            Some(path)
+            Ok(path)
         } else {
-            None
+            Err(ToryggError::DirectoryNotFound(path))
         }
     }
-    fn get_executable(&self) -> Option<PathBuf> {
+    fn get_executable(&self) -> Result<PathBuf, ToryggError> {
         let install_dir = self.get_install_dir()?;
         if let Some(mle) = self.mod_loader_executable {
             let mle_path = install_dir.join(mle);
             if mle_path.exists() {
-                return Some(mle_path);
+                return Ok(mle_path);
             }
         }
 
-        Some(install_dir.join(self.executable))
+        Ok(install_dir.join(self.executable))
     }
 
-    fn get_wine_pfx(&self) -> Option<Prefix> {
+    fn get_wine_pfx(&self) -> Result<Prefix, ToryggError> {
         let path = util::get_steam_library(self)?
             .join("steamapps/compatdata")
             .join(self.appid.to_string())
             .join("pfx");
 
-        Some(Prefix::new(path))
+        return if path.exists() {
+            Err(ToryggError::PrefixNotFound)
+        } else {
+            Ok(Prefix::new(path))
+        }
     }
 
     fn get_name(&self) -> &'static str {
         self.name
     }
 
-    fn run(&self) -> Result<(), &'static str> {
+    fn run(&self) -> Result<(), ToryggError> {
         let install_dir = self.get_install_dir().unwrap();
         let executable = self.get_executable().unwrap();
 
@@ -79,10 +85,10 @@ impl Game for SteamApp {
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,
-            Err(_) => return Err("Failed to spawn child"),
+            Err(_) => return Err(ToryggError::FailedToSpawnChild),
         };
 
-        if child
+        child
             .stdin
             .take()
             .unwrap()
@@ -93,66 +99,62 @@ impl Game for SteamApp {
                     executable.display()
                 )
                 .as_bytes(),
-            )
-            .is_err()
-        {
-            return Err("failed to write to child");
-        }
+            )?;
 
         let status = match child.wait() {
             Ok(status) => status,
-            Err(_) => return Err("Child failed"),
+            Err(_) => return Err(ToryggError::ChildFailed),
         };
 
         if !status.success() {
-            return Err("Child failed");
+            return Err(ToryggError::ChildFailed);
         }
 
         Ok(())
     }
 
-    fn get_wine_user_dir(&self) -> Result<PathBuf, &'static str> {
-        match std::env::var_os("TORYGG_USER_DIRECTORY") {
-            Some(str) => {
-                let path = PathBuf::from(str);
-                if path.exists() {
-                    Ok(path)
-                } else {
-                    Err("specified path does not exist")
-                }
-            }
-            None => {
-                let err = Err("wine user dir not found");
-                let path = self.get_wine_pfx()
-                    .ok_or("skyrim install dir not found")?
-                    .pfx;
-                let mut path = path.clone();
-                path.push("drive_c/users");
-                let steamuser = path.join("steamuser");
-                if steamuser.exists() {
-                    Ok(steamuser)
-                } else if let Some(current_user) =
-                    std::env::vars().collect::<HashMap<_, _>>().get("USER")
-                {
-                    let user_dir = path.join(current_user);
-                    if user_dir.exists() {
-                        Ok(user_dir)
-                    } else {
-                        err
-                    }
-                } else {
-                    err
-                }
+    fn get_wine_user_dir(&self) -> Result<PathBuf, ToryggError> {
+        // Prioritise a path specified via environment variable
+        if let Some(str) = std::env::var_os("TORYGG_USER_DIRECTORY") {
+            let path = PathBuf::from(str);
+            return if path.exists() {
+                Ok(path)
+            } else {
+                Err(ToryggError::DirectoryNotFound(path))
             }
         }
+
+        let path = self.get_wine_pfx()?
+            .pfx;
+        let mut path = path.clone();
+        path.push("drive_c/users");
+
+        // When run through proton username is steamuser
+        let steamuser = path.join("steamuser");
+        if steamuser.exists() {
+            return Ok(steamuser)
+        }
+
+        if let Some(current_user) =
+            std::env::vars().collect::<HashMap<_, _>>().get("USER")
+        {
+            let user_dir = path.join(current_user);
+            return if user_dir.exists() {
+                Ok(user_dir)
+            } else {
+                Err(DirectoryNotFound(user_dir))
+            }
+        }
+
+        Err(ToryggError::Other("wine user dir not found".to_owned()))
     }
 
-    fn get_config_dir(&self) -> Result<PathBuf, &'static str> {
+    fn get_config_dir(&self) -> Result<PathBuf, ToryggError> {
         Ok(self.get_wine_user_dir()?.join(String::from("My Documents/My Games/") + self.get_name()))
     }
 
     // Folder where profile Plugins.txt is kept
-    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str> {
+    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError> {
         Ok(self.get_wine_user_dir()?
             .join(String::from("Local Settings/Application Data/") + self.get_name()))
     }

@@ -4,6 +4,7 @@ use std::process::Command;
 use log::{error, info};
 use crate::games::Game;
 use crate::{config, Profile, util::verify_directory};
+use crate::error::ToryggError;
 
 pub struct AppLauncher<'a> {
     app: &'static dyn Game,
@@ -26,33 +27,30 @@ impl<'a> AppLauncher<'a> {
         lower_paths: &mut Vec<PathBuf>,
         upper_path: &Path,
         work_path: &Path,
-    ) -> Result<(), &'static str> {
-        let last_component = path
-            .iter()
-            .last()
-            .ok_or("Failed to get last component")?
-            .to_string_lossy()
-            .to_string();
+    ) -> Result<(), ToryggError> {
+        let dir_name = path.file_name()
+            .ok_or(ToryggError::Other("could not get folder name".to_owned()))?
+            .to_string_lossy().to_string();
         let backup_path = path
             .parent()
-            .ok_or("Path has no parent")?
-            .join(last_component + "~");
+            .ok_or(ToryggError::Other("path has no parent".to_owned()))?
+            .join(dir_name + "~");
 
         // Add the backup path (original contents) to lower_paths
         lower_paths.push(backup_path.clone());
         let lower_paths_string =
-            std::env::join_paths(lower_paths).map_err(|_| "Failed to join lower paths")?;
+            std::env::join_paths(lower_paths).map_err(|_| ToryggError::Other("faield to join lower paths".to_owned()))?;
         let lower_paths_string = lower_paths_string.to_string_lossy();
 
         // Move path to backup
-        let err = fs::rename(path, &backup_path).map_err(|_| "Failed to rename dir");
+        let err = fs::rename(path, &backup_path).map_err(|_| ToryggError::Other("Failed to rename dir".to_string()));
         if err.is_err() {
             error!("Failed to rename {:?} to {:?}", path, backup_path);
         }
         err?;
 
         // Recreate path so we can mount on it
-        fs::create_dir(path).map_err(|_| "Failed to recreate dir")?;
+        fs::create_dir(path)?;
 
         let mut cmd = Command::new("fuse-overlayfs");
         cmd.arg("-o");
@@ -66,16 +64,16 @@ impl<'a> AppLauncher<'a> {
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,
-            Err(_) => return Err("Failed to spawn child"),
+            Err(_) => return Err(ToryggError::FailedToSpawnChild),
         };
 
         let status = match child.wait() {
             Ok(status) => status,
-            Err(_) => return Err("Child failed"),
+            Err(_) => return Err(ToryggError::ChildFailed),
         };
 
         if !status.success() {
-            return Err("Child failed");
+            return Err(ToryggError::ChildFailed);
         }
 
         self.mounted_paths.push(path.to_owned());
@@ -83,14 +81,12 @@ impl<'a> AppLauncher<'a> {
         info!("Mounted: {:?}", path);
         Ok(())
     }
-    fn mount_all(&mut self) -> Result<(), &'static str> {
+    fn mount_all(&mut self) -> Result<(), ToryggError> {
         let work_path = config::get_data_dir()?.join(".OverlayFS");
         verify_directory(&work_path)?;
 
         // Mount data
-        let Some(install_path) = self.app.get_install_dir() else {
-            return Err("Game not installed")
-        };
+        let install_path = self.app.get_install_dir()?;
 
         let data_path = install_path.join("Data");
 
@@ -119,7 +115,7 @@ impl<'a> AppLauncher<'a> {
         Ok(())
     }
 
-    pub fn run(&mut self) -> Result<(), &'static str> {
+    pub fn run(&mut self) -> Result<(), ToryggError> {
         self.mount_all()?;
 
         let result = self.app.run();

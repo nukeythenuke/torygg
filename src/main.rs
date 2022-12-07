@@ -126,7 +126,7 @@ enum Subcommands {
     },
 }
 
-fn main() -> Result<(), anyhow::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     TermLogger::init(
@@ -142,11 +142,11 @@ fn main() -> Result<(), anyhow::Error> {
     .unwrap();
 
     // Verify directories exist
-    verify_directory(&config::get_data_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-    verify_directory(&config::get_mods_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-    verify_directory(&config::get_overwrite_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-    verify_directory(&config::get_profiles_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-    verify_directory(&config::get_data_dir().map_err(|e| anyhow!(e))?.join("Configs")).map_err(|e| anyhow!(e))?;
+    verify_directory(&config::get_data_dir()?)?;
+    verify_directory(&config::get_mods_dir()?)?;
+    verify_directory(&config::get_overwrite_dir()?)?;
+    verify_directory(&config::get_profiles_dir()?)?;
+    verify_directory(&config::get_data_dir()?.join("Configs"))?;
 
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {

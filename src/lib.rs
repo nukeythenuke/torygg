@@ -1,6 +1,7 @@
 pub mod applauncher;
 pub mod config;
 pub mod games;
+pub mod error;
 
 use std::collections::HashMap;
 use std::fs;
@@ -11,6 +12,7 @@ use anyhow::anyhow;
 use log::error;
 use tempfile::TempDir;
 use walkdir::WalkDir;
+use crate::error::ToryggError;
 
 use crate::games::Game;
 use crate::util::verify_directory;
@@ -41,16 +43,17 @@ pub mod wine {
 pub mod util {
     use std::{fs, fs::File, iter::FromIterator, path::PathBuf};
     use std::path::Path;
+    use crate::error::ToryggError;
     use crate::games;
 
     pub fn get_libraryfolders_vdf() -> PathBuf {
         PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
     }
 
-    pub fn get_steam_library(app: &games::SteamApp) -> Option<PathBuf> {
+    pub fn get_steam_library(app: &games::SteamApp) -> Result<PathBuf, ToryggError> {
         let vdf = get_libraryfolders_vdf();
-        let mut file = File::open(vdf).ok()?;
-        let kvs = torygg_vdf::parse(&mut file).ok()?;
+        let mut file = File::open(vdf)?;
+        let kvs = torygg_vdf::parse(&mut file)?;
 
         for kv in &kvs {
             let components = kv.0.iter().collect::<Vec<_>>();
@@ -61,28 +64,28 @@ pub mod util {
                     // libraryfolders/<lib_id>/path
                     let path = PathBuf::from_iter(kv.0.iter().take(2)).join("path");
 
-                    return Some(kvs[&path].clone().into());
+                    return Ok(kvs[&path].clone().into());
                 }
             }
         }
 
-        None
+        Err(ToryggError::SteamLibraryNotFound)
     }
 
-    pub fn verify_directory(path: &Path) -> Result<(), &'static str> {
+    pub fn verify_directory(path: &Path) -> Result<(), ToryggError> {
         if path.exists() {
             path.is_dir()
                 .then(|| ())
-                .ok_or("path exists but is not a directory")
+                .ok_or(ToryggError::NotADirectory(path.to_owned()))
         } else {
-            fs::create_dir(path).map_err(|_| "Couldn't create directory")
+            fs::create_dir(path)?;
+            Ok(())
         }
     }
 }
 
-pub fn get_profiles() -> Result<Vec<Profile>, &'static str> {
-    Ok(fs::read_dir(config::get_profiles_dir()?)
-        .map_err(|_| "Could not read profiles dir")?
+pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
+    Ok(fs::read_dir(config::get_profiles_dir()?)?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             e.is_dir()
@@ -128,10 +131,10 @@ impl std::str::FromStr for Profile {
 }
 
 impl Profile {
-    pub fn new(profile_name: &str) -> Result<Profile, &'static str> {
+    pub fn new(profile_name: &str) -> Result<Profile, ToryggError> {
         let path = config::get_profiles_dir()?.join(profile_name);
         if path.exists() {
-            Err("Profile already exists!")
+            Err(ToryggError::ProfileAlreadyExists)
         } else {
             verify_directory(&path)?;
             Ok(Profile { name: profile_name.to_string(), mods: HashMap::new() })
@@ -187,11 +190,11 @@ impl Profile {
         Ok(Profile { name: "default".to_owned(), mods: mod_map })
     }
 
-    pub fn create_mod(&self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn create_mod(&self, mod_name: &str) -> Result<(), ToryggError> {
         if !self.is_mod_installed(mod_name) {
             verify_directory(&self.get_mods_dir().unwrap().join(mod_name))
         } else {
-            Err("Mod with same name already exists!")
+            Err(ToryggError::ModAlreadyExists)
         }
     }
 
@@ -301,19 +304,19 @@ impl Profile {
         }).collect()
     }
 
-    pub fn get_dir(&self) -> Result<PathBuf, &'static str> {
+    pub fn get_dir(&self) -> Result<PathBuf, ToryggError> {
         let dir = config::get_profiles_dir()?.join(&self.name);
         verify_directory(&dir)?;
         Ok(dir)
     }
 
-    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str> {
+    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError> {
         let dir = self.get_dir()?.join("AppData");
         verify_directory(&dir)?;
         Ok(dir)
     }
 
-    fn get_mods_dir(&self) -> Result<PathBuf, &'static str> {
+    fn get_mods_dir(&self) -> Result<PathBuf, ToryggError> {
         let dir = self.get_dir()?.join("Mods");
         verify_directory(&dir)?;
         Ok(dir)
