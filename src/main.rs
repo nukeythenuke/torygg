@@ -17,7 +17,7 @@ use torygg::{
     install_mod_from_archive,
     is_mod_active,
     uninstall_mod,
-    verify_directory,
+    util::verify_directory,
     config,
     games,
     applauncher::AppLauncher};

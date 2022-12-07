@@ -1,4 +1,4 @@
-use crate::verify_directory;
+use crate::util::verify_directory;
 use std::path::PathBuf;
 
 static APP_NAME: &str = "torygg";

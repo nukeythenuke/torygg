@@ -8,7 +8,7 @@ use crate::{
     get_active_mods,
     get_appdata_dir,
     get_config_dir,
-    verify_directory};
+    util::verify_directory};
 
 pub struct AppLauncher<'a> {
     app: &'static dyn Game,
