@@ -1,4 +1,5 @@
 pub mod applauncher;
+pub mod config;
 
 use std::collections::HashMap;
 use std::fs;
@@ -10,43 +11,6 @@ use tempfile::TempDir;
 use walkdir::WalkDir;
 
 use crate::games::Game;
-
-pub mod config {
-    use std::path::PathBuf;
-    use crate::verify_directory;
-
-    static APP_NAME: &str = "torygg";
-
-    static MODS_SUBDIR: &str = "Mods";
-    static OVERWRITE_SUBDIR: &str = "Overwrite";
-    static PROFILES_SUBDIR: &str = "Profiles";
-
-    pub fn get_data_dir() -> Result<PathBuf, &'static str> {
-        let dir = dirs::data_dir()
-            .ok_or("Could not find torygg's data dir")?
-            .join(APP_NAME);
-        verify_directory(&dir)?;
-        Ok(dir)
-    }
-
-    pub fn get_mods_dir() -> Result<PathBuf, &'static str> {
-        let dir = get_data_dir()?.join(MODS_SUBDIR);
-        verify_directory(&dir)?;
-        Ok(dir)
-    }
-
-    pub fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
-        let dir = get_data_dir()?.join(OVERWRITE_SUBDIR);
-        verify_directory(&dir)?;
-        Ok(dir)
-    }
-
-    pub fn get_profiles_dir() -> Result<PathBuf, &'static str> {
-        let dir = get_data_dir()?.join(PROFILES_SUBDIR);
-        verify_directory(&dir)?;
-        Ok(dir)
-    }
-}
 
 pub mod wine {
     use std::collections::HashMap;
