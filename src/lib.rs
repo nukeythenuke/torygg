@@ -2,6 +2,7 @@ pub mod applauncher;
 
 use std::collections::HashMap;
 use std::fs;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::error;
@@ -516,6 +517,104 @@ pub fn get_data_dir() -> Result<PathBuf, &'static str> {
         .join(APP_NAME);
     verify_directory(&dir)?;
     Ok(dir)
+}
+
+pub struct Profile {
+    // Mod name, enabled
+    mods: HashMap<String, bool>,
+    mod_dir: PathBuf
+}
+
+impl Deref for Profile {
+    type Target = HashMap<String, bool>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.mods
+    }
+}
+
+impl DerefMut for Profile {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mods
+    }
+}
+
+impl Profile {
+                               // Enabled, plugins
+    fn read_meta(path: &Path) -> (bool, Vec<String>) {
+        todo!()
+    }
+
+    fn write_meta(mod_name: &str, contents: (bool, Vec<String>)) {
+        todo!()
+    }
+
+    fn from_dir(mod_dir: PathBuf) -> Result<Profile, &'static str> {
+        let dir_contents: Vec<PathBuf> = fs::read_dir(&mod_dir)
+            .map_err(|_| "Could not read mods dir")?
+            .filter_map(|entry| Some(entry.ok()?.path()))
+            .collect();
+
+        let files: Vec<&PathBuf> = dir_contents.iter().filter(|path| path.is_file()).collect();
+        let dirs = dir_contents.iter().filter(|path| path.is_dir());
+
+        let mut mod_map = HashMap::new();
+        for dir in dirs {
+            let mod_name = dir.file_stem().unwrap();
+
+            // TODO: Better than this
+            let mut found_meta = false;
+            let mut is_enabled = false;
+            for file in files.iter() {
+                if file.file_stem().unwrap() == mod_name {
+                    found_meta = true;
+                    is_enabled = Self::read_meta(file.to_owned()).0;
+                    break;
+                }
+            }
+
+            if !found_meta {
+                todo!("Create a new meta file")
+            }
+
+            mod_map.insert(mod_name.to_string_lossy().to_string(), is_enabled);
+        }
+
+        // TODO: Clean up meta files that do not have an associated mod directory
+
+        Ok(Profile { mods: mod_map, mod_dir })
+    }
+
+    fn install_mod() {
+        todo!()
+    }
+    fn uninstall_mod() {
+        todo!()
+    }
+
+    fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) -> Result<(), &'static str>{
+        let res = if self.deref().contains_key(mod_name) {
+            self.deref_mut().insert(mod_name.to_owned(), enabled);
+            Ok(())
+        } else {
+            Err("Mod not installed")
+        };
+
+        if res.is_ok() {
+            // TODO: Find plugins
+            Self::write_meta(mod_name, (enabled, Vec::new()))
+        }
+
+        res
+    }
+
+    fn enable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+        self.set_mod_enabled(mod_name, true)
+    }
+
+    fn disable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+        self.set_mod_enabled(mod_name, false)
+    }
 }
 
 pub fn get_mods_dir() -> Result<PathBuf, &'static str> {
