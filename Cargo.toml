@@ -1,7 +1,7 @@
 [package]
 name = "torygg"
 version = "0.1.0"
-authors = ["nukeythenuke <nukeythenuke@gmail.com>"]
+authors = ["Norman McKeown <normanmckeown@duck.com>"]
 edition = "2021"
 
 [lib]
