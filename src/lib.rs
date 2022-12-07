@@ -142,11 +142,11 @@ impl Profile {
         &self.name
     }
                                // Enabled, plugins
-    fn read_meta(path: &Path) -> (bool, Vec<String>) {
+    fn read_mod_meta(path: &Path) -> (bool, Vec<String>) {
         todo!()
     }
 
-    fn write_meta(mod_name: &str, contents: (bool, Vec<String>)) {
+    fn write_mod_meta(mod_name: &str, contents: (bool, Vec<String>)) {
         todo!()
     }
 
@@ -169,7 +169,7 @@ impl Profile {
             for file in files.iter() {
                 if file.file_stem().unwrap() == mod_name {
                     found_meta = true;
-                    is_enabled = Self::read_meta(file.to_owned()).0;
+                    is_enabled = Self::read_mod_meta(file.to_owned()).0;
                     break;
                 }
             }
@@ -268,7 +268,7 @@ impl Profile {
 
         if res.is_ok() {
             // TODO: Find plugins
-            Self::write_meta(mod_name, (enabled, Vec::new()))
+            Self::write_mod_meta(mod_name, (enabled, Vec::new()))
         }
 
         res
