@@ -349,6 +349,15 @@ impl DerefMut for Profile {
 }
 
 impl Profile {
+    fn new(profile_name: &str) -> Result<Profile, &'static str> {
+        let path = config::get_profiles_dir()?.join(profile_name);
+        if path.exists() {
+            Err("Profile already exists!")
+        } else {
+            verify_directory(&path)?;
+            Ok(Profile { name: profile_name.to_string(), mods: HashMap::new() })
+        }
+    }
                                // Enabled, plugins
     fn read_meta(path: &Path) -> (bool, Vec<String>) {
         todo!()
