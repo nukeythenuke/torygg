@@ -427,6 +427,17 @@ impl Profile {
         self.set_mod_enabled(mod_name, false)
     }
 
+    fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
+        self.mods.get(mod_name).ok_or("Mod not installed")
+    }
+
+    fn get_enabled_mods(&self, mod_name: &str) -> Vec<&String> {
+        self.mods.iter().filter_map(|(name, enabled)| match enabled {
+            true => Some(name),
+            false => None
+        }).collect()
+    }
+
     fn get_dir(&self) -> Result<PathBuf, &'static str> {
         let dir = config::get_profiles_dir()?.join(&self.name);
         verify_directory(&dir)?;
