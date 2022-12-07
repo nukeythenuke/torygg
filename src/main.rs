@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use anyhow::anyhow;
 
 use clap::{Parser, Subcommand};
 use log::{error, info};
@@ -125,7 +126,7 @@ enum Subcommands {
     },
 }
 
-fn main() {
+fn main() -> Result<(), anyhow::Error> {
     let cli = Cli::parse();
 
     TermLogger::init(
@@ -141,16 +142,11 @@ fn main() {
     .unwrap();
 
     // Verify directories exist
-    if let Err(e) = || -> Result<(), &'static str> {
-        verify_directory(&config::get_data_dir()?)?;
-        verify_directory(&config::get_mods_dir()?)?;
-        verify_directory(&config::get_overwrite_dir()?)?;
-        verify_directory(&config::get_profiles_dir()?)?;
-        verify_directory(&config::get_data_dir()?.join("Configs"))
-    }() {
-        error!("{}", e);
-        return;
-    }
+    verify_directory(&config::get_data_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+    verify_directory(&config::get_mods_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+    verify_directory(&config::get_overwrite_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+    verify_directory(&config::get_profiles_dir().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+    verify_directory(&config::get_data_dir().map_err(|e| anyhow!(e))?.join("Configs")).map_err(|e| anyhow!(e))?;
 
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
@@ -219,14 +215,8 @@ fn main() {
 
         Subcommands::DeleteProfile { profile } => {
             info!("Deleting profile with name: {}", profile.get_name());
-            match || -> anyhow::Result<()> {
-                let dir = profile.get_dir().unwrap();
-                fs::remove_dir_all(dir)?;
-                Ok(())
-            }() {
-                Ok(_) => (),
-                Err(e) => error!("{e}")
-            }
+            let dir = profile.get_dir().map_err(|e| anyhow!(e))?;
+            fs::remove_dir_all(dir)?;
         }
 
         Subcommands::Overwrite { /*profile*/ .. } => {
@@ -245,4 +235,6 @@ fn main() {
             }
         },
     }
+
+    Ok(())
 }
