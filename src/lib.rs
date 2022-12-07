@@ -329,9 +329,9 @@ pub fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'stati
 }
 
 pub struct Profile {
+    name: String,
     // Mod name, enabled
-    mods: HashMap<String, bool>,
-    mod_dir: PathBuf
+    mods: HashMap<String, bool>
 }
 
 impl Deref for Profile {
@@ -391,7 +391,8 @@ impl Profile {
 
         // TODO: Clean up meta files that do not have an associated mod directory
 
-        Ok(Profile { mods: mod_map, mod_dir })
+        // TODO: Fetch a specific profile
+        Ok(Profile { name: "default".to_owned(), mods: mod_map })
     }
 
     fn install_mod() {
@@ -424,6 +425,24 @@ impl Profile {
 
     fn disable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
         self.set_mod_enabled(mod_name, false)
+    }
+
+    fn get_dir(&self) -> Result<PathBuf, &'static str> {
+        let dir = config::get_profiles_dir()?.join(&self.name);
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+
+    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str> {
+        let dir = self.get_dir()?.join("AppData");
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+
+    fn get_mods_dir(&self) -> Result<PathBuf, &'static str> {
+        let dir = self.get_dir()?.join("Mods");
+        verify_directory(&dir)?;
+        Ok(dir)
     }
 }
 
