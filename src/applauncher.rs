@@ -3,7 +3,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::{error, info};
 use crate::games::Game;
-use crate::{get_active_mods, get_appdata_dir, get_config_dir, get_data_dir, get_mods_dir, get_overwrite_dir, verify_directory};
+use crate::{
+    config,
+    get_active_mods,
+    get_appdata_dir,
+    get_config_dir,
+    verify_directory};
 
 pub struct AppLauncher<'a> {
     app: &'static dyn Game,
@@ -84,7 +89,7 @@ impl<'a> AppLauncher<'a> {
         Ok(())
     }
     fn mount_all(&mut self) -> Result<(), &'static str> {
-        let work_path = get_data_dir()?.join(".OverlayFS");
+        let work_path = config::get_data_dir()?.join(".OverlayFS");
         verify_directory(&work_path)?;
 
         // Mount data
@@ -94,25 +99,25 @@ impl<'a> AppLauncher<'a> {
 
         let data_path = install_path.join("Data");
 
-        let mods_path = get_mods_dir()?;
+        let mods_path = config::get_mods_dir()?;
         let mut mod_paths = get_active_mods(self.profile)?
             .into_iter()
             .map(|m| mods_path.join(m))
             .collect::<Vec<_>>();
 
-        let override_path = get_overwrite_dir()?;
+        let override_path = config::get_overwrite_dir()?;
 
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
         // Mount config
         let config_path = get_config_dir(self.app)?;
-        let upper_path = get_data_dir()?.join("Configs");
+        let upper_path = config::get_data_dir()?.join("Configs");
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
         let appdata_path = get_appdata_dir(self.app)?;
-        let upper_path = get_data_dir()?.join("Configs");
+        let upper_path = config::get_data_dir()?.join("Configs");
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
 

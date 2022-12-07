@@ -8,13 +8,45 @@ use std::process::Command;
 use log::error;
 use tempfile::TempDir;
 use walkdir::WalkDir;
+
 use crate::games::Game;
 
-static APP_NAME: &str = "torygg";
+pub mod config {
+    use std::path::PathBuf;
+    use crate::verify_directory;
 
-static MODS_SUBDIR: &str = "Mods";
-static OVERWRITE_SUBDIR: &str = "Overwrite";
-static PROFILES_SUBDIR: &str = "Profiles";
+    static APP_NAME: &str = "torygg";
+
+    static MODS_SUBDIR: &str = "Mods";
+    static OVERWRITE_SUBDIR: &str = "Overwrite";
+    static PROFILES_SUBDIR: &str = "Profiles";
+
+    pub fn get_data_dir() -> Result<PathBuf, &'static str> {
+        let dir = dirs::data_dir()
+            .ok_or("Could not find torygg's data dir")?
+            .join(APP_NAME);
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+
+    pub fn get_mods_dir() -> Result<PathBuf, &'static str> {
+        let dir = get_data_dir()?.join(MODS_SUBDIR);
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+
+    pub fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
+        let dir = get_data_dir()?.join(OVERWRITE_SUBDIR);
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+
+    pub fn get_profiles_dir() -> Result<PathBuf, &'static str> {
+        let dir = get_data_dir()?.join(PROFILES_SUBDIR);
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
+}
 
 pub mod wine {
     use std::collections::HashMap;
@@ -253,7 +285,7 @@ pub fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(
         // This is where we would want to handle FOMODS
 
         // Copy all files in the mod root to the installed mods directory
-        let install_path = get_mods_dir().unwrap().join(mod_name);
+        let install_path = config::get_mods_dir().unwrap().join(mod_name);
         verify_directory(&install_path).unwrap();
         for entry in WalkDir::new(&mod_root)
             .min_depth(1)
@@ -277,7 +309,7 @@ pub fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(
 
 pub fn create_mod(mod_name: &str) -> Result<(), &'static str> {
     if !is_mod_installed(mod_name)? {
-        verify_directory(&get_mods_dir().unwrap().join(mod_name))
+        verify_directory(&config::get_mods_dir().unwrap().join(mod_name))
     } else {
         Err("Mod with same name already exists!")
     }
@@ -296,12 +328,12 @@ pub fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
 }
 
 fn get_mod_dir(mod_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = get_mods_dir()?.join(mod_name);
+    let dir = config::get_mods_dir()?.join(mod_name);
     dir.exists().then(|| dir).ok_or("mod dir does not exist")
 }
 
 pub fn get_installed_mods() -> Result<Vec<String>, &'static str> {
-    Ok(fs::read_dir(get_mods_dir()?)
+    Ok(fs::read_dir(config::get_mods_dir()?)
         .map_err(|_| "Could not read mods dir")?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
@@ -317,7 +349,7 @@ fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
 }
 
 pub fn get_profiles() -> Result<Vec<String>, &'static str> {
-    Ok(fs::read_dir(get_profiles_dir()?)
+    Ok(fs::read_dir(config::get_profiles_dir()?)
         .map_err(|_| "Could not read profiles dir")?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
@@ -329,7 +361,7 @@ pub fn get_profiles() -> Result<Vec<String>, &'static str> {
 }
 
 pub fn create_profile(profile_name: &str) -> Result<(), &'static str> {
-    let path = get_profiles_dir()?.join(profile_name);
+    let path = config::get_profiles_dir()?.join(profile_name);
     if path.exists() {
         Err("Profile already exists!")
     } else {
@@ -345,7 +377,7 @@ pub fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static s
         Err("Mod already active")
     } else {
         // Discover plugins
-        let mod_dir = get_mods_dir()?.join(mod_name);
+        let mod_dir = config::get_mods_dir()?.join(mod_name);
         let plugins = fs::read_dir(mod_dir)
             .map_err(|_| "Failed to read mod dir")?
             .filter_map(|e| Some(e.ok()?.path()))
@@ -511,14 +543,6 @@ fn get_appdata_dir(game: &dyn Game) -> Result<PathBuf, &'static str> {
         .join(String::from("Local Settings/Application Data/") + game.get_name()))
 }
 
-pub fn get_data_dir() -> Result<PathBuf, &'static str> {
-    let dir = dirs::data_dir()
-        .ok_or("Could not find torygg's data dir")?
-        .join(APP_NAME);
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
 pub struct Profile {
     // Mod name, enabled
     mods: HashMap<String, bool>,
@@ -617,26 +641,8 @@ impl Profile {
     }
 }
 
-pub fn get_mods_dir() -> Result<PathBuf, &'static str> {
-    let dir = get_data_dir()?.join(MODS_SUBDIR);
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
-pub fn get_overwrite_dir() -> Result<PathBuf, &'static str> {
-    let dir = get_data_dir()?.join(OVERWRITE_SUBDIR);
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
-pub fn get_profiles_dir() -> Result<PathBuf, &'static str> {
-    let dir = get_data_dir()?.join(PROFILES_SUBDIR);
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
 pub fn get_profile_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = get_profiles_dir()?.join(profile_name);
+    let dir = config::get_profiles_dir()?.join(profile_name);
     verify_directory(&dir)?;
     Ok(dir)
 }

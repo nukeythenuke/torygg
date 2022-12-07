@@ -11,17 +11,14 @@ use torygg::{
     create_mod,
     create_profile,
     deactivate_mod,
-    get_data_dir,
     get_installed_mods,
-    get_mods_dir,
-    get_overwrite_dir,
     get_profiles,
     get_profile_dir,
-    get_profiles_dir,
     install_mod_from_archive,
     is_mod_active,
     uninstall_mod,
     verify_directory,
+    config,
     games,
     applauncher::AppLauncher};
 
@@ -143,11 +140,11 @@ fn main() {
 
     // Verify directories exist
     if let Err(e) = || -> Result<(), &'static str> {
-        verify_directory(&get_data_dir()?)?;
-        verify_directory(&get_mods_dir()?)?;
-        verify_directory(&get_overwrite_dir()?)?;
-        verify_directory(&get_profiles_dir()?)?;
-        verify_directory(&get_data_dir()?.join("Configs"))
+        verify_directory(&config::get_data_dir()?)?;
+        verify_directory(&config::get_mods_dir()?)?;
+        verify_directory(&config::get_overwrite_dir()?)?;
+        verify_directory(&config::get_profiles_dir()?)?;
+        verify_directory(&config::get_data_dir()?.join("Configs"))
     }() {
         error!("{}", e);
         return;
@@ -260,7 +257,7 @@ fn main() {
 
         Subcommands::Overwrite { /*profile*/ .. } => {
             info!("Listing overwrite directory contents");
-            for e in WalkDir::new(get_overwrite_dir().unwrap()).min_depth(1) {
+            for e in WalkDir::new(config::get_overwrite_dir().unwrap()).min_depth(1) {
                 println!("{}", e.unwrap().path().display());
             }
         },
