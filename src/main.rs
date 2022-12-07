@@ -156,23 +156,8 @@ fn main() {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
             println!("Mods");
-            let mods = profile.get_mods().keys().into_iter();
-
-            let statuses = mods.clone().map(|m| match profile.is_mod_enabled(&m) {
-                Ok(enabled) => {
-                    if *enabled {
-                        "*"
-                    } else {
-                        ""
-                    }
-                }
-                Err(_) => "",
-            });
-        
-            let combined = mods.zip(statuses);
-        
-            for m in combined {
-                println!("{}{}", m.1, m.0)
+            for (m, enabled) in profile.get_mods() {
+                println!("{}{}", if *enabled { "*" } else { "" }, m)
             }
             
         },
