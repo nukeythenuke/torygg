@@ -328,52 +328,6 @@ pub fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'stati
     Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
-fn get_wine_user_dir() -> Result<PathBuf, &'static str> {
-    match std::env::var_os("TORYGG_USER_DIRECTORY") {
-        Some(str) => {
-            let path = PathBuf::from(str);
-            if path.exists() {
-                Ok(path)
-            } else {
-                Err("specified path does not exist")
-            }
-        }
-        None => {
-            let err = Err("wine user dir not found");
-            let path = (games::SKYRIM_SPECIAL_EDITION).get_wine_pfx()
-                .ok_or("skyrim install dir not found")?
-                .pfx;
-            let mut path = path.clone();
-            path.push("drive_c/users");
-            let steamuser = path.join("steamuser");
-            if steamuser.exists() {
-                Ok(steamuser)
-            } else if let Some(current_user) =
-                std::env::vars().collect::<HashMap<_, _>>().get("USER")
-            {
-                let user_dir = path.join(current_user);
-                if user_dir.exists() {
-                    Ok(user_dir)
-                } else {
-                    err
-                }
-            } else {
-                err
-            }
-        }
-    }
-}
-
-fn get_config_dir(game: &dyn Game) -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?.join(String::from("My Documents/My Games/") + game.get_name()))
-}
-
-// Folder where profile Plugins.txt is kept
-fn get_appdata_dir(game: &dyn Game) -> Result<PathBuf, &'static str> {
-    Ok(get_wine_user_dir()?
-        .join(String::from("Local Settings/Application Data/") + game.get_name()))
-}
-
 pub struct Profile {
     // Mod name, enabled
     mods: HashMap<String, bool>,
@@ -443,6 +397,7 @@ impl Profile {
     fn install_mod() {
         todo!()
     }
+
     fn uninstall_mod() {
         todo!()
     }

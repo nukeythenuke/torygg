@@ -1,4 +1,5 @@
-use crate::util;
+use std::collections::HashMap;
+use crate::{games, util};
 use crate::wine::Prefix;
 use log::info;
 use std::io::Write;
@@ -11,6 +12,10 @@ pub trait Game {
     fn get_wine_pfx(&self) -> Option<Prefix>;
     fn get_name(&self) -> &'static str;
     fn run(&self) -> Result<(), &'static str>;
+    fn get_wine_user_dir(&self) -> Result<PathBuf, &'static str>;
+    fn get_config_dir(&self) -> Result<PathBuf, &'static str>;
+    // Folder where profile Plugins.txt is kept
+    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str>;
 }
 
 /// appid: Steam app id
@@ -104,6 +109,52 @@ impl Game for SteamApp {
         }
 
         Ok(())
+    }
+
+    fn get_wine_user_dir(&self) -> Result<PathBuf, &'static str> {
+        match std::env::var_os("TORYGG_USER_DIRECTORY") {
+            Some(str) => {
+                let path = PathBuf::from(str);
+                if path.exists() {
+                    Ok(path)
+                } else {
+                    Err("specified path does not exist")
+                }
+            }
+            None => {
+                let err = Err("wine user dir not found");
+                let path = self.get_wine_pfx()
+                    .ok_or("skyrim install dir not found")?
+                    .pfx;
+                let mut path = path.clone();
+                path.push("drive_c/users");
+                let steamuser = path.join("steamuser");
+                if steamuser.exists() {
+                    Ok(steamuser)
+                } else if let Some(current_user) =
+                    std::env::vars().collect::<HashMap<_, _>>().get("USER")
+                {
+                    let user_dir = path.join(current_user);
+                    if user_dir.exists() {
+                        Ok(user_dir)
+                    } else {
+                        err
+                    }
+                } else {
+                    err
+                }
+            }
+        }
+    }
+
+    fn get_config_dir(&self) -> Result<PathBuf, &'static str> {
+        Ok(self.get_wine_user_dir()?.join(String::from("My Documents/My Games/") + self.get_name()))
+    }
+
+    // Folder where profile Plugins.txt is kept
+    fn get_appdata_dir(&self) -> Result<PathBuf, &'static str> {
+        Ok(self.get_wine_user_dir()?
+            .join(String::from("Local Settings/Application Data/") + self.get_name()))
     }
 }
 

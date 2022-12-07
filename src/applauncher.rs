@@ -6,8 +6,6 @@ use crate::games::Game;
 use crate::{
     config,
     get_active_mods,
-    get_appdata_dir,
-    get_config_dir,
     util::verify_directory};
 
 pub struct AppLauncher<'a> {
@@ -110,13 +108,13 @@ impl<'a> AppLauncher<'a> {
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
         // Mount config
-        let config_path = get_config_dir(self.app)?;
+        let config_path = self.app.get_config_dir()?;
         let upper_path = config::get_data_dir()?.join("Configs");
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
-        let appdata_path = get_appdata_dir(self.app)?;
+        let appdata_path = self.app.get_appdata_dir()?;
         let upper_path = config::get_data_dir()?.join("Configs");
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
