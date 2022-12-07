@@ -6,7 +6,13 @@ use log::{error, info};
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{get_installed_mods, get_profiles, get_profile_dir, util::verify_directory, config, games, applauncher::AppLauncher, is_mod_active, Profile, install_mod_from_archive, uninstall_mod, activate_mod, deactivate_mod, create_mod, create_profile};
+use torygg::{
+    get_profiles,
+    util::verify_directory,
+    config,
+    games,
+    applauncher::AppLauncher,
+    Profile};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -33,6 +39,10 @@ enum Subcommands {
 
     /// install a mod from an archive
     Install {
+        /// profile to install the mod into
+        #[arg(long)]
+        profile: Profile,
+
         /// mod archive to install
         #[arg(long)]
         archive: PathBuf,
@@ -44,6 +54,9 @@ enum Subcommands {
 
     /// uninstall a mod
     Uninstall {
+        /// profile to uninstall the mod from
+        profile: Profile,
+
         /// name of mod to uninstall
         #[arg(long)]
         name: String,
@@ -73,6 +86,9 @@ enum Subcommands {
 
     /// create a new, empty, mod
     CreateMod {
+        /// profile to create the mod in
+        profile: Profile,
+
         /// name of mod to create
         #[arg(long)]
         name: String,
@@ -89,9 +105,9 @@ enum Subcommands {
 
     /// delete a profile
     DeleteProfile {
-        /// name of the profile to delete
+        /// profile to delete
         #[arg(long)]
-        name: Profile,
+        profile: Profile,
     },
 
     /// launch the game with mods
@@ -140,17 +156,11 @@ fn main() {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
             println!("Mods");
-            let mods = match get_installed_mods() {
-                Ok(mods) => mods.into_iter(),
-                Err(e) => {
-                    error!("{}", e);
-                    return;
-                }
-            };
+            let mods = profile.get_mods().keys().into_iter();
 
-            let statuses = mods.clone().map(|m| match is_mod_active(profile.get_name(), &m) {
+            let statuses = mods.clone().map(|m| match profile.is_mod_enabled(&m) {
                 Ok(enabled) => {
-                    if enabled {
+                    if *enabled {
                         "*"
                     } else {
                         ""
@@ -166,37 +176,39 @@ fn main() {
             }
             
         },
-        Subcommands::Install { archive, name } => {
+        Subcommands::Install { profile, archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            if let Err(e) = install_mod_from_archive(archive, name) {
+            if let Err(e) = profile.install_mod(archive, name) {
                 error!("{}", e);
             }
         },
 
-        Subcommands::Uninstall { name } => {
+        Subcommands::Uninstall { profile, name } => {
             info!("Uninstalling {name}");
-            if let Err(e) = uninstall_mod(name) {
+            if let Err(e) = profile.uninstall_mod(name) {
                 error!("{}", e);
             }
         },
 
         Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
-            if let Err(e) = activate_mod(profile.get_name(), name) {
+            let mut profile = profile.clone();
+            if let Err(e) = profile.enable_mod(name) {
                 error!("{}", e);
             } 
         },
 
         Subcommands::Deactivate { profile, name } => {
             info!("Deactivating {name}");
-            if let Err(e) = deactivate_mod(profile.get_name(), name) {
+            let mut profile = profile.clone();
+            if let Err(e) = profile.disable_mod(name) {
                 error!("{}", e);
             }
         },
 
-        Subcommands::CreateMod { name } => {
+        Subcommands::CreateMod { profile, name } => {
             info!("Creating new mod with name: {name}");
-            if let Err(e) = create_mod(name) {
+            if let Err(e) = profile.create_mod(name) {
                 error!("{}", e);
             }
         },
@@ -215,15 +227,15 @@ fn main() {
 
         Subcommands::CreateProfile { name } => {
             info!("Creating a profile with name: {name}");
-            if let Err(e) = create_profile(name) {
+            if let Err(e) = Profile::new(name) {
                 error!("{e}");
             }
         },
 
-        Subcommands::DeleteProfile { name } => {
-            info!("Deleting profile with name: {}", name.get_name());
+        Subcommands::DeleteProfile { profile } => {
+            info!("Deleting profile with name: {}", profile.get_name());
             match || -> anyhow::Result<()> {
-                let dir = get_profile_dir(name.get_name()).unwrap();
+                let dir = profile.get_dir().unwrap();
                 fs::remove_dir_all(dir)?;
                 Ok(())
             }() {

@@ -365,7 +365,7 @@ impl std::str::FromStr for Profile {
 }
 
 impl Profile {
-    fn new(profile_name: &str) -> Result<Profile, &'static str> {
+    pub fn new(profile_name: &str) -> Result<Profile, &'static str> {
         let path = config::get_profiles_dir()?.join(profile_name);
         if path.exists() {
             Err("Profile already exists!")
@@ -424,7 +424,7 @@ impl Profile {
         Ok(Profile { name: "default".to_owned(), mods: mod_map })
     }
 
-    fn create_mod(&self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn create_mod(&self, mod_name: &str) -> Result<(), &'static str> {
         if !self.is_mod_installed(mod_name) {
             verify_directory(&self.get_mods_dir().unwrap().join(mod_name))
         } else {
@@ -432,11 +432,11 @@ impl Profile {
         }
     }
 
-    fn install_mod() {
+    pub fn install_mod(&self, archive: &Path, name: &str) -> Result<(), &'static str>{
         todo!()
     }
 
-    fn uninstall_mod() {
+    pub fn uninstall_mod(&self, name: &str) -> Result<(), &'static str> {
         todo!()
     }
 
@@ -456,11 +456,11 @@ impl Profile {
         res
     }
 
-    fn enable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn enable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
         self.set_mod_enabled(mod_name, true)
     }
 
-    fn disable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn disable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
         self.set_mod_enabled(mod_name, false)
     }
 
@@ -468,11 +468,11 @@ impl Profile {
         self.mods.contains_key(mod_name)
     }
 
-    fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
+    pub fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
         self.mods.get(mod_name).ok_or("Mod not installed")
     }
 
-    fn get_mods(&self) -> &HashMap<String, bool> {
+    pub fn get_mods(&self) -> &HashMap<String, bool> {
         &self.mods
     }
 
@@ -483,7 +483,7 @@ impl Profile {
         }).collect()
     }
 
-    fn get_dir(&self) -> Result<PathBuf, &'static str> {
+    pub fn get_dir(&self) -> Result<PathBuf, &'static str> {
         let dir = config::get_profiles_dir()?.join(&self.name);
         verify_directory(&dir)?;
         Ok(dir)
