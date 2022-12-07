@@ -3,19 +3,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::{error, info};
 use crate::games::Game;
-use crate::{
-    config,
-    get_active_mods,
-    util::verify_directory};
+use crate::{config, Profile, util::verify_directory};
 
 pub struct AppLauncher<'a> {
     app: &'static dyn Game,
-    profile: &'a str,
+    profile: &'a Profile,
     mounted_paths: Vec<PathBuf>,
 }
 
 impl<'a> AppLauncher<'a> {
-    pub fn new(app: &'static dyn Game, profile: &'a str) -> Self {
+    pub fn new(app: &'static dyn Game, profile: &'a Profile) -> Self {
         AppLauncher {
             app,
             profile,
@@ -98,7 +95,7 @@ impl<'a> AppLauncher<'a> {
         let data_path = install_path.join("Data");
 
         let mods_path = config::get_mods_dir()?;
-        let mut mod_paths = get_active_mods(self.profile)?
+        let mut mod_paths = self.profile.get_enabled_mods()
             .into_iter()
             .map(|m| mods_path.join(m))
             .collect::<Vec<_>>();

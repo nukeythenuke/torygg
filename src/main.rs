@@ -253,7 +253,7 @@ fn main() {
 
         Subcommands::Run { profile } => {
             info!("Running the game");
-            let mut launcher = AppLauncher::new(cli.game, profile.get_name());
+            let mut launcher = AppLauncher::new(cli.game, profile);
 
             if let Err(err) = launcher.run() {
                 error!("{}", err);

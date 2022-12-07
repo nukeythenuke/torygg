@@ -80,106 +80,6 @@ pub mod util {
     }
 }
 
-pub fn install_mod_from_archive(archive_path: &Path, mod_name: &str) -> Result<(), &'static str> {
-    if !archive_path.exists() {
-        Err("Archive does not exist!")
-    } else if is_mod_installed(mod_name)? {
-        Err("Mod already exists!")
-    } else {
-        let archive_extract_dir = TempDir::new().unwrap();
-        let archive_extract_path = archive_extract_dir.into_path();
-
-        // Use p7zip to extract the archive to a temporary directory
-        let mut command = Command::new("7z");
-        command.arg("x");
-        command.arg(format!("-o{}", archive_extract_path.display()));
-        command.arg(&archive_path);
-
-        let status = command.status().map_err(|_| "Unable to extract archive")?;
-        if !status.success() {
-            return Err("Unable to extract archive");
-        }
-
-        // Detect if mod is contained within a subdirectory
-        // and move it if it is
-        let mut mod_root = archive_extract_path;
-        let entries = fs::read_dir(&mod_root)
-            .map_err(|_| "Couldn't read dir")?
-            .filter_map(|e| e.ok())
-            .collect::<Vec<fs::DirEntry>>();
-        if entries.len() == 1 {
-            let path = entries[0].path();
-            if path.is_dir() {
-                mod_root = path
-            }
-        }
-
-        // This is where we would want to handle FOMODS
-
-        // Copy all files in the mod root to the installed mods directory
-        let install_path = config::get_mods_dir().unwrap().join(mod_name);
-        verify_directory(&install_path).unwrap();
-        for entry in WalkDir::new(&mod_root)
-            .min_depth(1)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            let from = entry.path();
-            let relative_path = from.strip_prefix(&mod_root).unwrap();
-            let to = install_path.join(relative_path);
-
-            if from.is_dir() {
-                fs::create_dir(to).unwrap();
-            } else {
-                fs::copy(from, to).unwrap();
-            }
-        }
-
-        Ok(())
-    }
-}
-
-pub fn create_mod(mod_name: &str) -> Result<(), &'static str> {
-    if !is_mod_installed(mod_name)? {
-        verify_directory(&config::get_mods_dir().unwrap().join(mod_name))
-    } else {
-        Err("Mod with same name already exists!")
-    }
-}
-
-pub fn uninstall_mod(mod_name: &str) -> Result<(), &'static str> {
-    if is_mod_installed(mod_name)? {
-        for p in get_profiles()? {
-            deactivate_mod(&p.get_name(), mod_name).ok();
-        }
-
-        fs::remove_file(get_mod_dir(mod_name).unwrap()).map_err(|_| "Failed to remove file")
-    } else {
-        Err("Mod not installed")
-    }
-}
-
-fn get_mod_dir(mod_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = config::get_mods_dir()?.join(mod_name);
-    dir.exists().then(|| dir).ok_or("mod dir does not exist")
-}
-
-pub fn get_installed_mods() -> Result<Vec<String>, &'static str> {
-    Ok(fs::read_dir(config::get_mods_dir()?)
-        .map_err(|_| "Could not read mods dir")?
-        .filter_map(|e| Some(e.ok()?.path()))
-        .filter_map(|e| {
-            (e.is_dir())
-                .then(|| ())
-                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
-        })
-        .collect())
-}
-
-fn is_mod_installed(mod_name: &str) -> Result<bool, &'static str> {
-    Ok(get_installed_mods()?.contains(&mod_name.to_owned()))
-}
-
 pub fn get_profiles() -> Result<Vec<Profile>, &'static str> {
     Ok(fs::read_dir(config::get_profiles_dir()?)
         .map_err(|_| "Could not read profiles dir")?
@@ -190,143 +90,6 @@ pub fn get_profiles() -> Result<Vec<Profile>, &'static str> {
                 .and_then(|_| Profile::from_dir(e).ok())
         })
         .collect())
-}
-
-pub fn create_profile(profile_name: &str) -> Result<(), &'static str> {
-    let path = config::get_profiles_dir()?.join(profile_name);
-    if path.exists() {
-        Err("Profile already exists!")
-    } else {
-        verify_directory(&path)?;
-        Ok(())
-    }
-}
-
-pub fn activate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
-    if !is_mod_installed(mod_name)? {
-        Err("Mod not installed")
-    } else if is_mod_active(profile_name, mod_name)? {
-        Err("Mod already active")
-    } else {
-        // Discover plugins
-        let mod_dir = config::get_mods_dir()?.join(mod_name);
-        let plugins = fs::read_dir(mod_dir)
-            .map_err(|_| "Failed to read mod dir")?
-            .filter_map(|e| Some(e.ok()?.path()))
-            .filter(|e| e.extension().is_some())
-            .filter(|e| e.extension().unwrap().to_str().is_some())
-            .filter(|e| {
-                matches!(
-                    e.extension().unwrap().to_str().unwrap(),
-                    "esp" | "esm" | "esl"
-                )
-            })
-            .filter_map(|e| {
-                (!e.is_dir())
-                    .then(|| ())
-                    .and_then(|_| Some(e.file_name()?.to_str()?.to_owned()))
-            })
-            .collect::<Vec<String>>();
-
-        fs::write(
-            get_profile_mods_dir(profile_name)?.join(mod_name),
-            plugins.join("\n"),
-        )
-            .map_err(|_| "Failed to write to profile's mods dir")?;
-
-        let plugins_path = get_profile_appdata_dir(profile_name)?.join("Plugins.txt");
-        let plugins_string = if plugins_path.exists() {
-            fs::read_to_string(&plugins_path).map_err(|_| "Could not read Plugins.txt")?
-        } else {
-            "".to_owned()
-        };
-
-        let mut plugins_vec = if plugins_string.is_empty() {
-            Vec::new()
-        } else {
-            plugins_string.split('\n').map(|s| s.to_owned()).collect()
-        };
-
-        for plugin in plugins {
-            plugins_vec.push(format!("*{}", plugin));
-        }
-
-        fs::write(plugins_path, plugins_vec.join("\n")).map_err(|e| {
-            error!("{}", e.to_string());
-            "Failed to write Plugins.txt"
-        })
-    }
-}
-
-pub fn deactivate_mod(profile_name: &str, mod_name: &str) -> Result<(), &'static str> {
-    if !is_mod_installed(mod_name)? {
-        Err("Mod not installed")
-    } else if !is_mod_active(profile_name, mod_name)? {
-        Err("Mod is not active")
-    } else {
-        let plugins_path = get_profile_appdata_dir(profile_name)?.join("Plugins.txt");
-        let plugins_string = if plugins_path.exists() {
-            fs::read_to_string(&plugins_path).map_err(|_| "Could not read Plugins.txt")?
-        } else {
-            "".to_owned()
-        };
-
-        let mut plugins_vec = if plugins_string.is_empty() {
-            Vec::new()
-        } else {
-            plugins_string.split('\n').map(|s| s.to_owned()).collect()
-        };
-
-        let mod_plugins_string =
-            fs::read_to_string(get_profile_mods_dir(profile_name)?.join(mod_name))
-                .map_err(|_| "Failed to read mod plugins")?;
-
-        let mod_plugins_vec = if plugins_string.is_empty() {
-            Vec::new()
-        } else {
-            mod_plugins_string
-                .split('\n')
-                .map(|s| s.to_owned())
-                .collect()
-        };
-
-        let mod_plugins_vec_active = mod_plugins_vec
-            .iter()
-            .map(|s| format!("*{}", s))
-            .collect::<Vec<String>>();
-
-        for i in 0..plugins_vec.len() {
-            if mod_plugins_vec.contains(&plugins_vec[i]) {
-                plugins_vec.remove(i);
-            }
-            if mod_plugins_vec_active.contains(&plugins_vec[i]) {
-                plugins_vec.remove(i);
-            }
-        }
-
-        fs::remove_file(get_profile_mods_dir(profile_name)?.join(mod_name))
-            .map_err(|_| "Failed to remove mod file")?;
-        fs::write(plugins_path, plugins_vec.join("\n")).map_err(|e| {
-            error!("{}", e.to_string());
-            "Failed to write Plugins.txt"
-        })
-    }
-}
-
-fn get_active_mods(profile_name: &str) -> Result<Vec<String>, &'static str> {
-    Ok(fs::read_dir(get_profile_mods_dir(profile_name)?)
-        .map_err(|_| "Could not read dir")?
-        .filter_map(|e| Some(e.ok()?.path()))
-        .filter_map(|e| {
-            (!e.is_dir())
-                .then(|| ())
-                .and_then(|_| Some(e.file_stem()?.to_str()?.to_owned()))
-        })
-        .collect::<Vec<String>>())
-}
-
-pub fn is_mod_active(profile_name: &str, mod_name: &str) -> Result<bool, &'static str> {
-    Ok(get_active_mods(profile_name)?.contains(&mod_name.to_owned()))
 }
 
 #[derive(Clone)]
@@ -433,7 +196,62 @@ impl Profile {
     }
 
     pub fn install_mod(&self, archive: &Path, name: &str) -> Result<(), &'static str>{
-        todo!()
+        if !archive.exists() {
+            Err("Archive does not exist!")
+        } else if self.is_mod_installed(name) {
+            Err("Mod already exists!")
+        } else {
+            let archive_extract_dir = TempDir::new().unwrap();
+            let archive_extract_path = archive_extract_dir.into_path();
+
+            // Use p7zip to extract the archive to a temporary directory
+            let mut command = Command::new("7z");
+            command.arg("x");
+            command.arg(format!("-o{}", archive_extract_path.display()));
+            command.arg(&archive);
+
+            let status = command.status().map_err(|_| "Unable to extract archive")?;
+            if !status.success() {
+                return Err("Unable to extract archive");
+            }
+
+            // Detect if mod is contained within a subdirectory
+            // and move it if it is
+            let mut mod_root = archive_extract_path;
+            let entries = fs::read_dir(&mod_root)
+                .map_err(|_| "Couldn't read dir")?
+                .filter_map(|e| e.ok())
+                .collect::<Vec<fs::DirEntry>>();
+            if entries.len() == 1 {
+                let path = entries[0].path();
+                if path.is_dir() {
+                    mod_root = path
+                }
+            }
+
+            // This is where we would want to handle FOMODS
+
+            // Copy all files in the mod root to the installed mods directory
+            let install_path = self.get_mods_dir().unwrap().join(name);
+            verify_directory(&install_path).unwrap();
+            for entry in WalkDir::new(&mod_root)
+                .min_depth(1)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                let from = entry.path();
+                let relative_path = from.strip_prefix(&mod_root).unwrap();
+                let to = install_path.join(relative_path);
+
+                if from.is_dir() {
+                    fs::create_dir(to).unwrap();
+                } else {
+                    fs::copy(from, to).unwrap();
+                }
+            }
+
+            Ok(())
+        }
     }
 
     pub fn uninstall_mod(&self, name: &str) -> Result<(), &'static str> {
@@ -500,22 +318,4 @@ impl Profile {
         verify_directory(&dir)?;
         Ok(dir)
     }
-}
-
-pub fn get_profile_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = config::get_profiles_dir()?.join(profile_name);
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
-fn get_profile_mods_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = get_profile_dir(profile_name)?.join("Mods");
-    verify_directory(&dir)?;
-    Ok(dir)
-}
-
-fn get_profile_appdata_dir(profile_name: &str) -> Result<PathBuf, &'static str> {
-    let dir = get_profile_dir(profile_name)?.join("AppData");
-    verify_directory(&dir)?;
-    Ok(dir)
 }
