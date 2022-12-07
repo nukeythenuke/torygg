@@ -404,6 +404,14 @@ impl Profile {
         Ok(Profile { name: "default".to_owned(), mods: mod_map })
     }
 
+    fn create_mod(&self, mod_name: &str) -> Result<(), &'static str> {
+        if !self.is_mod_installed(mod_name) {
+            verify_directory(&self.get_mods_dir().unwrap().join(mod_name))
+        } else {
+            Err("Mod with same name already exists!")
+        }
+    }
+
     fn install_mod() {
         todo!()
     }
@@ -436,11 +444,19 @@ impl Profile {
         self.set_mod_enabled(mod_name, false)
     }
 
+    fn is_mod_installed(&self, mod_name: &str) -> bool {
+        self.mods.contains_key(mod_name)
+    }
+
     fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
         self.mods.get(mod_name).ok_or("Mod not installed")
     }
 
-    fn get_enabled_mods(&self, mod_name: &str) -> Vec<&String> {
+    fn get_mods(&self) -> &HashMap<String, bool> {
+        &self.mods
+    }
+
+    fn get_enabled_mods(&self) -> Vec<&String> {
         self.mods.iter().filter_map(|(name, enabled)| match enabled {
             true => Some(name),
             false => None
