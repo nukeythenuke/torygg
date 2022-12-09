@@ -9,12 +9,10 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
-use log::error;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
 
-use crate::games::Game;
 use crate::util::verify_directory;
 
 pub mod wine {
@@ -74,13 +72,15 @@ pub mod util {
 
     pub fn verify_directory(path: &Path) -> Result<(), ToryggError> {
         if path.exists() {
-            path.is_dir()
-                .then(|| ())
-                .ok_or(ToryggError::NotADirectory(path.to_owned()))
-        } else {
-            fs::create_dir(path)?;
-            Ok(())
+            return if !path.is_dir() {
+                Err(ToryggError::NotADirectory(path.to_owned()))
+            } else {
+                Ok(())
+            }
         }
+
+        fs::create_dir(path)?;
+        Ok(())
     }
 }
 
@@ -88,9 +88,11 @@ pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
     Ok(fs::read_dir(config::get_profiles_dir()?)?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
-            e.is_dir()
-                .then(|| ())
-                .and_then(|_| Profile::from_dir(e).ok())
+            if e.is_dir() {
+                Profile::from_dir(e).ok()
+            } else {
+                None
+            }
         })
         .collect())
 }
@@ -211,7 +213,7 @@ impl Profile {
             let mut command = Command::new("7z");
             command.arg("x");
             command.arg(format!("-o{}", archive_extract_path.display()));
-            command.arg(&archive);
+            command.arg(archive);
 
             let status = command.status().map_err(|_| "Unable to extract archive")?;
             if !status.success() {

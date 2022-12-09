@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use crate::{games, util};
+use crate::util;
 use crate::wine::Prefix;
 use log::info;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use crate::error::ToryggError;
-use crate::error::ToryggError::DirectoryNotFound;
 
 pub trait Game {
     fn get_install_dir(&self) -> Result<PathBuf, ToryggError>;
@@ -62,7 +61,7 @@ impl Game for SteamApp {
             .join(self.appid.to_string())
             .join("pfx");
 
-        return if path.exists() {
+        if path.exists() {
             Err(ToryggError::PrefixNotFound)
         } else {
             Ok(Prefix::new(path))
@@ -124,9 +123,8 @@ impl Game for SteamApp {
             }
         }
 
-        let path = self.get_wine_pfx()?
+        let mut path = self.get_wine_pfx()?
             .pfx;
-        let mut path = path.clone();
         path.push("drive_c/users");
 
         // When run through proton username is steamuser
@@ -142,7 +140,7 @@ impl Game for SteamApp {
             return if user_dir.exists() {
                 Ok(user_dir)
             } else {
-                Err(DirectoryNotFound(user_dir))
+                Err(ToryggError::DirectoryNotFound(user_dir))
             }
         }
 
