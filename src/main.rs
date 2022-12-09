@@ -1,15 +1,13 @@
 use std::fs;
 use std::path::PathBuf;
-use anyhow::anyhow;
 
 use clap::{Parser, Subcommand};
-use log::{error, info};
+use log::info;
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
 use torygg::{
     get_profiles,
-    config,
     games,
     applauncher::AppLauncher,
     Profile};
@@ -151,70 +149,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Subcommands::Install { profile, archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            if let Err(e) = profile.install_mod(archive, name) {
-                error!("{}", e);
-            }
+            profile.install_mod(archive, name)?
         },
 
         Subcommands::Uninstall { profile, name } => {
             info!("Uninstalling {name}");
-            if let Err(e) = profile.uninstall_mod(name) {
-                error!("{}", e);
-            }
+            profile.uninstall_mod(name)?
         },
 
         Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
             let mut profile = profile.clone();
-            if let Err(e) = profile.enable_mod(name) {
-                error!("{}", e);
-            } 
+            profile.enable_mod(name)?
         },
 
         Subcommands::Deactivate { profile, name } => {
             info!("Deactivating {name}");
             let mut profile = profile.clone();
-            if let Err(e) = profile.disable_mod(name) {
-                error!("{}", e);
-            }
+            profile.disable_mod(name)?;
         },
 
         Subcommands::CreateMod { profile, name } => {
             info!("Creating new mod with name: {name}");
-            if let Err(e) = profile.create_mod(name) {
-                error!("{}", e);
-            }
+            profile.create_mod(name)?;
         },
 
         Subcommands::ListProfiles => {
             info!("Listing profiles");
-            match get_profiles() {
-                Ok(profiles) => {
-                    for profile in profiles {
-                        println!("{}", profile.get_name())
-                    }
-                },
-                Err(e) => error!("{e}")
+            for profile in get_profiles()? {
+                println!("{}", profile.get_name())
             }
         },
 
         Subcommands::CreateProfile { name } => {
             info!("Creating a profile with name: {name}");
-            if let Err(e) = Profile::new(name) {
-                error!("{e}");
-            }
+            Profile::new(name)?;
         },
 
         Subcommands::DeleteProfile { profile } => {
             info!("Deleting profile with name: {}", profile.get_name());
-            let dir = profile.get_dir().map_err(|e| anyhow!(e))?;
+            let dir = profile.get_dir()?;
             fs::remove_dir_all(dir)?;
         }
 
         Subcommands::Overwrite { profile } => {
             info!("Listing overwrite directory contents");
             for e in WalkDir::new(profile.get_overwrite_dir()?).min_depth(1) {
-                println!("{}", e.unwrap().path().display());
+                println!("{}", e?.path().display());
             }
         },
 
@@ -222,9 +203,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Running the game");
             let mut launcher = AppLauncher::new(cli.game, profile);
 
-            if let Err(err) = launcher.run() {
-                error!("{}", err);
-            }
+            launcher.run()?;
         },
     }
 
