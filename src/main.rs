@@ -141,13 +141,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
 
-    // Verify directories exist
-    verify_directory(&config::get_data_dir()?)?;
-    verify_directory(&config::get_mods_dir()?)?;
-    verify_directory(&config::get_overwrite_dir()?)?;
-    verify_directory(&config::get_profiles_dir()?)?;
-    verify_directory(&config::get_data_dir()?.join("Configs"))?;
-
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
