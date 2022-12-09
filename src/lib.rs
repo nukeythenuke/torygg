@@ -155,16 +155,17 @@ impl Profile {
         todo!()
     }
 
-    fn from_dir(mod_dir: PathBuf) -> Result<Profile, &'static str> {
-        let dir_contents: Vec<PathBuf> = fs::read_dir(&mod_dir)
-            .map_err(|_| "Could not read mods dir")?
+    fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
+        let profile_name = profile_dir.file_name().unwrap().to_string_lossy().to_string();
+        let mut profile = Profile { name: profile_name, mods: HashMap::new() };
+
+        let dir_contents: Vec<PathBuf> = fs::read_dir(profile.get_mods_dir()?)?
             .filter_map(|entry| Some(entry.ok()?.path()))
             .collect();
 
         let files: Vec<&PathBuf> = dir_contents.iter().filter(|path| path.is_file()).collect();
         let dirs = dir_contents.iter().filter(|path| path.is_dir());
 
-        let mut mod_map = HashMap::new();
         for dir in dirs {
             let mod_name = dir.file_stem().unwrap();
 
@@ -183,13 +184,12 @@ impl Profile {
                 todo!("Create a new meta file")
             }
 
-            mod_map.insert(mod_name.to_string_lossy().to_string(), is_enabled);
+            profile.mods.insert(mod_name.to_string_lossy().to_string(), is_enabled);
         }
 
         // TODO: Clean up meta files that do not have an associated mod directory
 
-        // TODO: Fetch a specific profile
-        Ok(Profile { name: "default".to_owned(), mods: mod_map })
+        Ok(profile)
     }
 
     pub fn create_mod(&self, mod_name: &str) -> Result<(), ToryggError> {
