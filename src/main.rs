@@ -9,7 +9,6 @@ use walkdir::WalkDir;
 
 use torygg::{
     get_profiles,
-    util::verify_directory,
     config,
     games,
     applauncher::AppLauncher,
@@ -212,9 +211,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::remove_dir_all(dir)?;
         }
 
-        Subcommands::Overwrite { /*profile*/ .. } => {
+        Subcommands::Overwrite { profile } => {
             info!("Listing overwrite directory contents");
-            for e in WalkDir::new(config::get_overwrite_dir().unwrap()).min_depth(1) {
+            for e in WalkDir::new(profile.get_overwrite_dir()?).min_depth(1) {
                 println!("{}", e.unwrap().path().display());
             }
         },

@@ -323,4 +323,10 @@ impl Profile {
         verify_directory(&dir)?;
         Ok(dir)
     }
+
+    pub fn get_overwrite_dir(&self) -> Result<PathBuf, ToryggError> {
+        let dir = self.get_dir()?.join("Overwrite");
+        verify_directory(&dir)?;
+        Ok(dir)
+    }
 }

@@ -96,7 +96,7 @@ impl<'a> AppLauncher<'a> {
             .map(|m| mods_path.join(m))
             .collect::<Vec<_>>();
 
-        let override_path = config::get_overwrite_dir()?;
+        let override_path = self.profile.get_overwrite_dir()?;
 
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
