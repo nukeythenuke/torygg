@@ -43,11 +43,7 @@ impl<'a> AppLauncher<'a> {
         let lower_paths_string = lower_paths_string.to_string_lossy();
 
         // Move path to backup
-        let err = fs::rename(path, &backup_path).map_err(|_| ToryggError::Other("Failed to rename dir".to_string()));
-        if err.is_err() {
-            error!("Failed to rename {:?} to {:?}", path, backup_path);
-        }
-        err?;
+        fs::rename(path, &backup_path)?;
 
         // Recreate path so we can mount on it
         fs::create_dir(path)?;
@@ -81,6 +77,7 @@ impl<'a> AppLauncher<'a> {
         info!("Mounted: {:?}", path);
         Ok(())
     }
+
     fn mount_all(&mut self) -> Result<(), ToryggError> {
         let work_path = config::get_data_dir().join(".OverlayFS");
         verify_directory(&work_path)?;
@@ -125,7 +122,7 @@ impl<'a> AppLauncher<'a> {
         result
     }
 
-    fn unmount_all(&mut self) -> Result<(), &'static str> {
+    fn unmount_all(&mut self) -> Result<(), ToryggError> {
         info!("Unmounting paths");
         if !self.mounted_paths.is_empty() {
             self.mounted_paths.retain(|path| {
@@ -178,7 +175,7 @@ impl<'a> AppLauncher<'a> {
                 Ok(())
             } else {
                 error!("Failed to unmount: {:?}", self.mounted_paths);
-                Err("Failed to unmount all paths")
+                Err(ToryggError::Other("Failed to unmount directories".to_owned()))
             }
         } else {
             info!("No dirs to unmount.");
