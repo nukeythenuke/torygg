@@ -82,7 +82,7 @@ impl<'a> AppLauncher<'a> {
         Ok(())
     }
     fn mount_all(&mut self) -> Result<(), ToryggError> {
-        let work_path = config::get_data_dir()?.join(".OverlayFS");
+        let work_path = config::get_data_dir().join(".OverlayFS");
         verify_directory(&work_path)?;
 
         // Mount data
@@ -102,13 +102,13 @@ impl<'a> AppLauncher<'a> {
 
         // Mount config
         let config_path = self.app.get_config_dir()?;
-        let upper_path = config::get_data_dir()?.join("Configs");
+        let upper_path = config::get_data_dir().join("Configs");
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
         let appdata_path = self.app.get_appdata_dir()?;
-        let upper_path = config::get_data_dir()?.join("Configs");
+        let upper_path = config::get_data_dir().join("Configs");
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
 

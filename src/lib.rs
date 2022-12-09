@@ -85,7 +85,7 @@ pub mod util {
 }
 
 pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
-    Ok(fs::read_dir(config::get_profiles_dir()?)?
+    Ok(fs::read_dir(config::get_profiles_dir())?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             if e.is_dir() {
@@ -134,7 +134,7 @@ impl std::str::FromStr for Profile {
 
 impl Profile {
     pub fn new(profile_name: &str) -> Result<Profile, ToryggError> {
-        let path = config::get_profiles_dir()?.join(profile_name);
+        let path = config::get_profiles_dir().join(profile_name);
         if path.exists() {
             Err(ToryggError::ProfileAlreadyExists)
         } else {
@@ -307,7 +307,7 @@ impl Profile {
     }
 
     pub fn get_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = config::get_profiles_dir()?.join(&self.name);
+        let dir = config::get_profiles_dir().join(&self.name);
         verify_directory(&dir)?;
         Ok(dir)
     }
