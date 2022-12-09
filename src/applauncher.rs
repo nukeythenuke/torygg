@@ -39,7 +39,7 @@ impl<'a> AppLauncher<'a> {
         // Add the backup path (original contents) to lower_paths
         lower_paths.push(backup_path.clone());
         let lower_paths_string =
-            std::env::join_paths(lower_paths).map_err(|_| ToryggError::Other("faield to join lower paths".to_owned()))?;
+            std::env::join_paths(lower_paths).map_err(|_| ToryggError::Other("failed to join lower paths".to_owned()))?;
         let lower_paths_string = lower_paths_string.to_string_lossy();
 
         // Move path to backup
@@ -90,7 +90,7 @@ impl<'a> AppLauncher<'a> {
 
         let data_path = install_path.join("Data");
 
-        let mods_path = config::get_mods_dir()?;
+        let mods_path = self.profile.get_mods_dir()?;
         let mut mod_paths = self.profile.get_enabled_mods()
             .into_iter()
             .map(|m| mods_path.join(m))
