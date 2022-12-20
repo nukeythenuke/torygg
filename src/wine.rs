@@ -9,12 +9,17 @@ pub struct Prefix {
 
 impl Prefix {
     pub fn new(pfx: PathBuf) -> Prefix {
+        // TODO: Find the correct wine executable
+        let wine_exec = PathBuf::from("/usr/bin/wine");
+
+        // TODO: Find the correct environment variables
+        let mut env = HashMap::new();
+        env.insert("WINE_PREFIX".to_owned(), pfx.to_string_lossy().to_string());
+
         Prefix {
-            // TODO: Find the correct wine executable
-            wine_exec: Default::default(),
+            wine_exec,
             pfx,
-            // TODO: Find the correct environment variables
-            env: Default::default(),
+            env,
         }
     }
 }
