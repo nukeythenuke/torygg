@@ -7,10 +7,9 @@ use simplelog::TermLogger;
 use walkdir::WalkDir;
 
 use torygg::{
-    get_profiles,
     games,
     applauncher::AppLauncher,
-    profile::Profile};
+    profile::{Profile, get_profiles}};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

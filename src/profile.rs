@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
-use crate::{config, get_profiles};
+use crate::config;
 use crate::util::verify_directory;
 
 #[derive(Clone)]
@@ -242,4 +242,17 @@ impl Profile {
         verify_directory(&dir)?;
         Ok(dir)
     }
+}
+
+pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
+    Ok(fs::read_dir(config::get_profiles_dir())?
+        .filter_map(|e| Some(e.ok()?.path()))
+        .filter_map(|e| {
+            if e.is_dir() {
+                Profile::from_dir(e).ok()
+            } else {
+                None
+            }
+        })
+        .collect())
 }

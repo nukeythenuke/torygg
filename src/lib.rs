@@ -4,10 +4,6 @@ pub mod games;
 pub mod error;
 pub mod profile;
 
-use std::fs;
-use crate::error::ToryggError;
-use profile::Profile;
-
 pub mod wine {
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -75,17 +71,4 @@ pub mod util {
         fs::create_dir(path)?;
         Ok(())
     }
-}
-
-pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
-    Ok(fs::read_dir(config::get_profiles_dir())?
-        .filter_map(|e| Some(e.ok()?.path()))
-        .filter_map(|e| {
-            if e.is_dir() {
-                Profile::from_dir(e).ok()
-            } else {
-                None
-            }
-        })
-        .collect())
 }
