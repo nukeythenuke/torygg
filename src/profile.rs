@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
@@ -11,32 +10,32 @@ use crate::error::ToryggError;
 use crate::config;
 use crate::util::verify_directory;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mod {
     name: String,
-    enabled: bool,
+    is_enabled: bool,
     plugins: HashMap<String, bool>
 }
 
-#[derive(Clone)]
+impl Mod {
+    pub fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn get_is_enabled(&self) -> &bool {
+        &self.is_enabled
+    }
+
+    pub fn get_plugins(&self) -> &HashMap<String, bool> {
+        &self.plugins
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Profile {
     name: String,
     // Mod name, enabled
-    mods: HashMap<String, bool>
-}
-
-impl Deref for Profile {
-    type Target = HashMap<String, bool>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.mods
-    }
-}
-
-impl DerefMut for Profile {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.mods
-    }
+    mods: Option<Vec<Mod>>
 }
 
 impl std::str::FromStr for Profile {
@@ -60,7 +59,7 @@ impl Profile {
             Err(ToryggError::ProfileAlreadyExists)
         } else {
             verify_directory(&path)?;
-            Ok(Profile { name: profile_name.to_string(), mods: HashMap::new() })
+            Ok(Profile { name: profile_name.to_string(), mods: None })
         }
     }
 
@@ -73,14 +72,14 @@ impl Profile {
         toml::from_str(&s).expect("failed to deserialize mod meta")
     }
 
-    fn write_mod_meta(path: &Path, m: Mod) {
+    fn write_mod_meta(path: &Path, m: &Mod) {
         let s = toml::to_string(&m).expect("failed to serialize mod meta");
         std::fs::write(path, s).expect("failed to write mod meta")
     }
 
     pub fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
         let profile_name = profile_dir.file_name().unwrap().to_string_lossy().to_string();
-        let mut profile = Profile { name: profile_name, mods: HashMap::new() };
+        let mut profile = Profile { name: profile_name, mods: None };
 
         let dir_contents: Vec<PathBuf> = fs::read_dir(profile.get_mods_dir()?)?
             .filter_map(|entry| Some(entry.ok()?.path()))
@@ -89,29 +88,32 @@ impl Profile {
         let files: Vec<&PathBuf> = dir_contents.iter().filter(|path| path.is_file()).collect();
         let dirs = dir_contents.iter().filter(|path| path.is_dir());
 
+        let mut mods = Vec::new();
         for dir in dirs {
             let mod_name = dir.file_stem().unwrap().to_string_lossy().to_string();
             let meta_name = mod_name.clone() + ".meta.toml";
             let meta_path = dir.join(meta_name);
 
-            let mut is_enabled = false;
-            if meta_path.exists() {
-                is_enabled = Self::read_mod_meta(&meta_path).enabled
+            let m = if meta_path.exists() {
+                Self::read_mod_meta(&meta_path)
             } else {
                 // TODO: Find plugin files
                 let m = Mod {
                     name: mod_name.clone(),
-                    enabled: false,
+                    is_enabled: false,
                     plugins: HashMap::new()
                 };
 
-                Self::write_mod_meta(&meta_path, m)
-            }
+                Self::write_mod_meta(&meta_path, &m);
+                m
+            };
 
-            profile.mods.insert(mod_name, is_enabled);
+            mods.push(m);
         }
 
-        // TODO: Clean up meta files that do not have an associated mod directory
+        if mods.is_empty() {
+            profile.mods = Some(mods);
+        }
 
         Ok(profile)
     }
@@ -188,25 +190,15 @@ impl Profile {
     }
 
     fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) -> Result<(), &'static str>{
-        let res = if self.deref().contains_key(mod_name) {
-            self.deref_mut().insert(mod_name.to_owned(), enabled);
-            Ok(())
-        } else {
-            Err("Mod not installed")
-        };
-
-        if res.is_ok() {
-            // TODO: Find plugins
-            let m = Mod {
-                name: mod_name.to_owned(),
-                enabled,
-                plugins: HashMap::new(),
-            };
-
-            Self::write_mod_meta(&self.get_mods_dir().unwrap().join(mod_name).join(mod_name.to_owned() + ".meta.toml"), m)
+        {
+            let mut m = self.get_mod_mut(mod_name).ok_or("Mod not installed")?;
+            m.is_enabled = enabled;
         }
 
-        res
+        let meta_path = self.get_mods_dir().unwrap().join(mod_name).join(mod_name.to_owned() + ".meta.toml");
+        Self::write_mod_meta(&meta_path, self.get_mod(mod_name).unwrap());
+
+        Ok(())
     }
 
     pub fn enable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
@@ -218,20 +210,53 @@ impl Profile {
     }
 
     fn is_mod_installed(&self, mod_name: &str) -> bool {
-        self.mods.contains_key(mod_name)
+        self.get_mod(mod_name).is_some()
     }
 
     pub fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
-        self.mods.get(mod_name).ok_or("Mod not installed")
+        let res = self.get_mod(mod_name).ok_or("mod not installed")?.get_is_enabled();
+        Ok(res)
     }
 
-    pub fn get_mods(&self) -> &HashMap<String, bool> {
+    pub fn get_mod(&self, mod_name: &str) -> Option<&Mod> {
+        let Some(mods) = &self.mods else {
+            return None;
+        };
+
+        for m in mods {
+            if m.name == mod_name {
+                return Some(m)
+            }
+        }
+
+        None
+    }
+
+    pub fn get_mod_mut(&mut self, mod_name: &str) -> Option<&mut Mod> {
+        let Some(mods) = &mut self.mods else {
+            return None;
+        };
+
+        for m in mods {
+            if m.name == mod_name {
+                return Some(m)
+            }
+        }
+
+        None
+    }
+
+    pub fn get_mods(&self) -> &Option<Vec<Mod>> {
         &self.mods
     }
 
     pub fn get_enabled_mods(&self) -> Vec<&String> {
-        self.mods.iter().filter_map(|(name, enabled)| match enabled {
-            true => Some(name),
+        let Some(mods) = &self.mods else {
+            return Vec::new()
+        };
+
+        mods.iter().filter_map(|m| match m.get_is_enabled() {
+            true => Some(m.get_name()),
             false => None
         }).collect()
     }

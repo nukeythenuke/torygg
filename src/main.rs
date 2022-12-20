@@ -140,9 +140,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
+            let Some(mods) = profile.get_mods() else {
+                println!("No mods.");
+                return Ok(());
+            };
+
             println!("Mods");
-            for (m, enabled) in profile.get_mods() {
-                println!("{}{}", if *enabled { "*" } else { "" }, m)
+            for m in mods {
+                println!("{}{}", if *m.get_is_enabled() { "*" } else { "" }, m.get_name())
             }
             
         },
