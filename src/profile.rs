@@ -4,11 +4,19 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
 use crate::config;
 use crate::util::verify_directory;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Mod {
+    name: String,
+    enabled: bool,
+    plugins: HashMap<String, bool>
+}
 
 #[derive(Clone)]
 pub struct Profile {
@@ -59,13 +67,15 @@ impl Profile {
     pub fn get_name(&self) -> &str {
         &self.name
     }
-                               // Enabled, plugins
-    fn read_mod_meta(path: &Path) -> (bool, Vec<String>) {
-        todo!()
+
+    fn read_mod_meta(path: &Path) -> Mod {
+        let s = std::fs::read_to_string(path).expect("failed to read mod meta");
+        toml::from_str(&s).expect("failed to deserialize mod meta")
     }
 
-    fn write_mod_meta(mod_name: &str, contents: (bool, Vec<String>)) {
-        todo!()
+    fn write_mod_meta(path: &Path, m: Mod) {
+        let s = toml::to_string(&m).expect("failed to serialize mod meta");
+        std::fs::write(path, s).expect("failed to write mod meta")
     }
 
     pub fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
@@ -80,24 +90,25 @@ impl Profile {
         let dirs = dir_contents.iter().filter(|path| path.is_dir());
 
         for dir in dirs {
-            let mod_name = dir.file_stem().unwrap();
+            let mod_name = dir.file_stem().unwrap().to_string_lossy().to_string();
+            let meta_name = mod_name.clone() + ".meta.toml";
+            let meta_path = dir.join(meta_name);
 
-            // TODO: Better than this
-            let mut found_meta = false;
             let mut is_enabled = false;
-            for file in files.iter() {
-                if file.file_stem().unwrap() == mod_name {
-                    found_meta = true;
-                    is_enabled = Self::read_mod_meta(file.to_owned()).0;
-                    break;
-                }
+            if meta_path.exists() {
+                is_enabled = Self::read_mod_meta(&meta_path).enabled
+            } else {
+                // TODO: Find plugin files
+                let m = Mod {
+                    name: mod_name.clone(),
+                    enabled: false,
+                    plugins: HashMap::new()
+                };
+
+                Self::write_mod_meta(&meta_path, m)
             }
 
-            if !found_meta {
-                todo!("Create a new meta file")
-            }
-
-            profile.mods.insert(mod_name.to_string_lossy().to_string(), is_enabled);
+            profile.mods.insert(mod_name, is_enabled);
         }
 
         // TODO: Clean up meta files that do not have an associated mod directory
@@ -186,7 +197,13 @@ impl Profile {
 
         if res.is_ok() {
             // TODO: Find plugins
-            Self::write_mod_meta(mod_name, (enabled, Vec::new()))
+            let m = Mod {
+                name: mod_name.to_owned(),
+                enabled,
+                plugins: HashMap::new(),
+            };
+
+            Self::write_mod_meta(&self.get_mods_dir().unwrap().join(mod_name).join(mod_name.to_owned() + ".meta.toml"), m)
         }
 
         res
