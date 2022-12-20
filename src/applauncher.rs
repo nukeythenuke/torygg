@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::{error, info};
 use crate::games::Game;
-use crate::{config, Profile, util::verify_directory};
+use crate::{config, profile::Profile, util::verify_directory};
 use crate::error::ToryggError;
 
 pub struct AppLauncher<'a> {

@@ -10,7 +10,7 @@ use torygg::{
     get_profiles,
     games,
     applauncher::AppLauncher,
-    Profile};
+    profile::Profile};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
