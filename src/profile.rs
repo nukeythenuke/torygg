@@ -46,16 +46,6 @@ impl Profile {
         &self.name
     }
 
-    fn read_mod_meta(path: &Path) -> Mod {
-        let s = std::fs::read_to_string(path).expect("failed to read mod meta");
-        toml::from_str(&s).expect("failed to deserialize mod meta")
-    }
-
-    fn write_mod_meta(path: &Path, m: &Mod) {
-        let s = toml::to_string(&m).expect("failed to serialize mod meta");
-        std::fs::write(path, s).expect("failed to write mod meta")
-    }
-
     pub fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
         let profile_name = profile_dir.file_name().unwrap().to_string_lossy().to_string();
         let mut profile = Profile { name: profile_name, mods: None };
