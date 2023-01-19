@@ -32,12 +32,3 @@ pub fn get_mods_dir() -> &'static PathBuf {
         dir
     })
 }
-
-pub fn get_profiles_dir() -> &'static PathBuf {
-    static PROFILES_DIR: OnceCell<PathBuf> = OnceCell::new();
-    PROFILES_DIR.get_or_init(|| {
-        let dir = get_data_dir().join("Profiles");
-        verify_directory(&dir).expect("Could not create profiles directory");
-        dir
-    })
-}
