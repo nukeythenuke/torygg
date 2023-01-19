@@ -3,13 +3,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
 use crate::{config, games};
 use crate::util::verify_directory;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     game: String,
     name: String,
@@ -47,44 +48,14 @@ impl Profile {
     }
 
     pub fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
-        let profile_name = profile_dir.file_name().unwrap().to_string_lossy().to_string();
-        let mut profile = Profile { name: profile_name, mods: None };
+        let Ok(profile_string) = std::fs::read_to_string(profile_dir.join("profile.toml")) else {
+            return Err(ToryggError::Other("failed to read profile.toml".to_owned()));
+        };
 
-        let dir_contents: Vec<PathBuf> = fs::read_dir(profile.get_mods_dir()?)?
-            .filter_map(|entry| Some(entry.ok()?.path()))
-            .collect();
-
-        let files: Vec<&PathBuf> = dir_contents.iter().filter(|path| path.is_file()).collect();
-        let dirs = dir_contents.iter().filter(|path| path.is_dir());
-
-        let mut mods = Vec::new();
-        for dir in dirs {
-            let mod_name = dir.file_stem().unwrap().to_string_lossy().to_string();
-            let meta_name = mod_name.clone() + ".meta.toml";
-            let meta_path = dir.join(meta_name);
-
-            let m = if meta_path.exists() {
-                Self::read_mod_meta(&meta_path)
-            } else {
-                // TODO: Find plugin files
-                let m = Mod {
-                    name: mod_name.clone(),
-                    is_enabled: false,
-                    plugins: HashMap::new()
-                };
-
-                Self::write_mod_meta(&meta_path, &m);
-                m
-            };
-
-            mods.push(m);
+        match toml::from_str::<Profile>(&profile_string) {
+            Ok(profile) => Ok(profile),
+            Err(e) => Err(ToryggError::Other(e.to_string()))
         }
-
-        if mods.is_empty() {
-            profile.mods = Some(mods);
-        }
-
-        Ok(profile)
     }
 
     pub fn create_mod(&self, mod_name: &str) -> Result<(), ToryggError> {
