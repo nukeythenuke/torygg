@@ -3,39 +3,20 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
-use crate::config;
+use crate::{config, games};
 use crate::util::verify_directory;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Mod {
-    name: String,
-    is_enabled: bool,
-    plugins: HashMap<String, bool>
-}
-
-impl Mod {
-    pub fn get_name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn get_is_enabled(&self) -> &bool {
-        &self.is_enabled
-    }
-
-    pub fn get_plugins(&self) -> &HashMap<String, bool> {
-        &self.plugins
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Profile {
+    game: String,
     name: String,
     // Mod name, enabled
-    mods: Option<Vec<Mod>>
+    mods: Option<Vec<String>>,
+    plugins: Option<Vec<String>>
 }
 
 impl std::str::FromStr for Profile {
@@ -53,13 +34,13 @@ impl std::str::FromStr for Profile {
 }
 
 impl Profile {
-    pub fn new(profile_name: &str) -> Result<Profile, ToryggError> {
+    pub fn new(profile_name: &str, game: impl games::Game) -> Result<Profile, ToryggError> {
         let path = config::get_config_dir().join(profile_name);
         if path.exists() {
             Err(ToryggError::ProfileAlreadyExists)
         } else {
             verify_directory(&path)?;
-            Ok(Profile { name: profile_name.to_string(), mods: None })
+            Ok(Profile { game: name: profile_name.to_string(), mods: None, plugins: None })
         }
     }
 
