@@ -4,6 +4,16 @@ use once_cell::sync::OnceCell;
 
 static APP_NAME: &str = "torygg";
 
+pub fn get_config_dir() -> &'static PathBuf {
+    static CONFIG_DIR: OnceCell<PathBuf> = OnceCell::new();
+    CONFIG_DIR.get_or_init(|| {
+        let  path = dirs::config_dir().expect("could not find location for config directory");
+        let dir = path.join(APP_NAME);
+        verify_directory(&dir).expect("could not create config directory");
+        dir
+    })
+}
+
 pub fn get_data_dir() -> &'static PathBuf {
     static DATA_DIR: OnceCell<PathBuf> = OnceCell::new();
     DATA_DIR.get_or_init(|| {
