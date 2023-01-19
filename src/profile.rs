@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::anyhow;
-use serde::Serialize;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
@@ -14,7 +13,6 @@ use crate::util::verify_directory;
 pub struct Profile {
     game: String,
     name: String,
-    // Mod name, enabled
     mods: Option<Vec<String>>,
     plugins: Option<Vec<String>>
 }
@@ -40,7 +38,7 @@ impl Profile {
             Err(ToryggError::ProfileAlreadyExists)
         } else {
             verify_directory(&path)?;
-            Ok(Profile { game: name: profile_name.to_string(), mods: None, plugins: None })
+            Ok(Profile { game: game.get_name().to_owned(), name: profile_name.to_string(), mods: None, plugins: None })
         }
     }
 
