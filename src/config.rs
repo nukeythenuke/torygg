@@ -41,12 +41,3 @@ pub fn get_profiles_dir() -> &'static PathBuf {
         dir
     })
 }
-
-pub fn get_configs_dir() -> &'static PathBuf {
-    static CONFIGS_DIR: OnceCell<PathBuf> = OnceCell::new();
-    CONFIGS_DIR.get_or_init(|| {
-        let dir = get_data_dir().join("Configs");
-        verify_directory(&dir).expect("Could not create configs directory");
-        dir
-    })
-}
