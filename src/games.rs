@@ -31,11 +31,17 @@ pub struct SteamApp {
     pub mod_loader_executable: Option<&'static str>,
 }
 
-impl Game for SteamApp {
+impl AsRef<SteamApp> for SteamApp {
+    fn as_ref(&self) -> &SteamApp {
+        self
+    }
+}
+
+impl<S> Game for S where S: AsRef<SteamApp> {
     fn get_install_dir(&self) -> Result<PathBuf, ToryggError> {
-        let path = util::get_steam_library(self)?
+        let path = util::get_steam_library(self.as_ref())?
             .join("steamapps/common")
-            .join(self.name);
+            .join(self.as_ref().name);
 
         if path.exists() {
             Ok(path)
@@ -45,20 +51,20 @@ impl Game for SteamApp {
     }
     fn get_executable(&self) -> Result<PathBuf, ToryggError> {
         let install_dir = self.get_install_dir()?;
-        if let Some(mle) = self.mod_loader_executable {
+        if let Some(mle) = self.as_ref().mod_loader_executable {
             let mle_path = install_dir.join(mle);
             if mle_path.exists() {
                 return Ok(mle_path);
             }
         }
 
-        Ok(install_dir.join(self.executable))
+        Ok(install_dir.join(self.as_ref().executable))
     }
 
     fn get_wine_pfx(&self) -> Result<Prefix, ToryggError> {
-        let path = util::get_steam_library(self)?
+        let path = util::get_steam_library(self.as_ref())?
             .join("steamapps/compatdata")
-            .join(self.appid.to_string())
+            .join(self.as_ref().appid.to_string())
             .join("pfx");
 
         if path.exists() {
@@ -69,7 +75,7 @@ impl Game for SteamApp {
     }
 
     fn get_name(&self) -> &'static str {
-        self.name
+        self.as_ref().name
     }
 
     fn run(&self) -> Result<(), ToryggError> {
@@ -78,7 +84,7 @@ impl Game for SteamApp {
 
         info!("Starting protontricks");
         let mut cmd = Command::new("protontricks");
-        cmd.arg(self.appid.to_string());
+        cmd.arg(self.as_ref().appid.to_string());
         cmd.arg("shell");
         cmd.stdin(Stdio::piped());
 

@@ -87,11 +87,16 @@ impl<'a> AppLauncher<'a> {
 
         let data_path = install_path.join("Data");
 
-        let mods_path = self.profile.get_mods_dir()?;
-        let mut mod_paths = self.profile.get_enabled_mods()
-            .into_iter()
-            .map(|m| mods_path.join(m))
-            .collect::<Vec<_>>();
+        let mut mod_paths = match self.profile.get_enabled_mods() {
+            Some(mods) => {
+                let mods_path = self.profile.get_mods_dir()?;
+                mods.into_iter()
+                    .map(|m| mods_path.join(m))
+                    .collect::<Vec<_>>()
+            }
+            None => Vec::new()
+        };
+
 
         let override_path = self.profile.get_overwrite_dir()?;
 

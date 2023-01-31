@@ -25,7 +25,7 @@ pub fn get_data_dir() -> &'static PathBuf {
     })
 }
 
-pub fn get_mods_dir(game: impl games::Game) -> &'static PathBuf {
+pub fn get_mods_dir(game: &impl games::Game) -> &'static PathBuf {
     static MODS_DIR: OnceCell<PathBuf> = OnceCell::new();
     MODS_DIR.get_or_init(|| {
         let dir = get_data_dir().join(game.get_name()).join("mods");

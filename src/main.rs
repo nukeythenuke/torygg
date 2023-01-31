@@ -140,14 +140,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
-            let Some(mods) = profile.get_mods() else {
+            let Some(mods) = profile.get_enabled_mods() else {
                 println!("No mods.");
                 return Ok(());
             };
 
             println!("Mods");
             for m in mods {
-                println!("{}{}", if *m.get_is_enabled() { "*" } else { "" }, m.get_name())
+                println!("{}{}", if profile.is_mod_enabled(m) { "*" } else { "" }, m)
             }
             
         },
@@ -164,13 +164,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
             let mut profile = profile.clone();
-            profile.enable_mod(name)?
+            profile.enable_mod(name)
         },
 
         Subcommands::Deactivate { profile, name } => {
             info!("Deactivating {name}");
             let mut profile = profile.clone();
-            profile.disable_mod(name)?;
+            profile.disable_mod(name);
         },
 
         Subcommands::CreateMod { profile, name } => {
@@ -187,7 +187,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Subcommands::CreateProfile { name } => {
             info!("Creating a profile with name: {name}");
-            Profile::new(name)?;
+            Profile::new(name, cli.game)?;
         },
 
         Subcommands::DeleteProfile { profile } => {

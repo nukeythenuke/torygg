@@ -59,146 +59,111 @@ impl Profile {
     }
 
     pub fn create_mod(&self, mod_name: &str) -> Result<(), ToryggError> {
-        if !self.is_mod_installed(mod_name) {
-            verify_directory(&self.get_mods_dir().unwrap().join(mod_name))
-        } else {
-            Err(ToryggError::ModAlreadyExists)
-        }
+        // TODO: check mod name is not already used (installed already)
+        // Err(ToryggError::ModAlreadyExists)
+
+        verify_directory(&self.get_mods_dir().unwrap().join(mod_name))
     }
 
     pub fn install_mod(&self, archive: &Path, name: &str) -> Result<(), &'static str>{
         if !archive.exists() {
-            Err("Archive does not exist!")
-        } else if self.is_mod_installed(name) {
-            Err("Mod already exists!")
-        } else {
-            let archive_extract_dir = TempDir::new().unwrap();
-            let archive_extract_path = archive_extract_dir.into_path();
-
-            // Use p7zip to extract the archive to a temporary directory
-            let mut command = Command::new("7z");
-            command.arg("x");
-            command.arg(format!("-o{}", archive_extract_path.display()));
-            command.arg(archive);
-
-            let status = command.status().map_err(|_| "Unable to extract archive")?;
-            if !status.success() {
-                return Err("Unable to extract archive");
-            }
-
-            // Detect if mod is contained within a subdirectory
-            // and move it if it is
-            let mut mod_root = archive_extract_path;
-            let entries = fs::read_dir(&mod_root)
-                .map_err(|_| "Couldn't read dir")?
-                .filter_map(|e| e.ok())
-                .collect::<Vec<fs::DirEntry>>();
-            if entries.len() == 1 {
-                let path = entries[0].path();
-                if path.is_dir() {
-                    mod_root = path
-                }
-            }
-
-            // This is where we would want to handle FOMODS
-
-            // Copy all files in the mod root to the installed mods directory
-            let install_path = self.get_mods_dir().unwrap().join(name);
-            verify_directory(&install_path).unwrap();
-            for entry in WalkDir::new(&mod_root)
-                .min_depth(1)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let from = entry.path();
-                let relative_path = from.strip_prefix(&mod_root).unwrap();
-                let to = install_path.join(relative_path);
-
-                if from.is_dir() {
-                    fs::create_dir(to).unwrap();
-                } else {
-                    fs::copy(from, to).unwrap();
-                }
-            }
-
-            Ok(())
+            return Err("Archive does not exist!");
         }
+
+        // TODO: check mod name is not already used (installed already)
+
+        let archive_extract_dir = TempDir::new().unwrap();
+        let archive_extract_path = archive_extract_dir.into_path();
+
+        // Use p7zip to extract the archive to a temporary directory
+        let mut command = Command::new("7z");
+        command.arg("x");
+        command.arg(format!("-o{}", archive_extract_path.display()));
+        command.arg(archive);
+
+        let status = command.status().map_err(|_| "Unable to extract archive")?;
+        if !status.success() {
+            return Err("Unable to extract archive");
+        }
+
+        // Detect if mod is contained within a subdirectory
+        // and move it if it is
+        let mut mod_root = archive_extract_path;
+        let entries = fs::read_dir(&mod_root)
+            .map_err(|_| "Couldn't read dir")?
+            .filter_map(|e| e.ok())
+            .collect::<Vec<fs::DirEntry>>();
+        if entries.len() == 1 {
+            let path = entries[0].path();
+            if path.is_dir() {
+                mod_root = path
+            }
+        }
+
+        // This is where we would want to handle FOMODS
+
+        // Copy all files in the mod root to the installed mods directory
+        let install_path = self.get_mods_dir().unwrap().join(name);
+        verify_directory(&install_path).unwrap();
+        for entry in WalkDir::new(&mod_root)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let from = entry.path();
+            let relative_path = from.strip_prefix(&mod_root).unwrap();
+            let to = install_path.join(relative_path);
+
+            if from.is_dir() {
+                fs::create_dir(to).unwrap();
+            } else {
+                fs::copy(from, to).unwrap();
+            }
+        }
+
+        Ok(())
     }
 
     pub fn uninstall_mod(&self, name: &str) -> Result<(), &'static str> {
         todo!()
     }
 
-    fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) -> Result<(), &'static str>{
-        {
-            let mut m = self.get_mod_mut(mod_name).ok_or("Mod not installed")?;
-            m.is_enabled = enabled;
+    fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) {
+        // TODO: Check if mod is installed
+
+        if self.mods.is_none() {
+            self.mods = Some(Vec::new());
         }
 
-        let meta_path = self.get_mods_dir().unwrap().join(mod_name).join(mod_name.to_owned() + ".meta.toml");
-        Self::write_mod_meta(&meta_path, self.get_mod(mod_name).unwrap());
+        // Should be safe as we have checked if self.mods is None and assigned it if not
+        let mods = self.mods.as_mut().unwrap();
 
-        Ok(())
+        if enabled {
+            if !mods.contains(&mod_name.to_owned()) {
+                mods.push(mod_name.to_owned());
+            }
+        } else if mods.contains(&mod_name.to_owned()) {
+            *mods = mods.clone().into_iter().filter(|name| name != mod_name).collect();
+        }
     }
 
-    pub fn enable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn enable_mod(&mut self, mod_name: &str) {
         self.set_mod_enabled(mod_name, true)
     }
 
-    pub fn disable_mod(&mut self, mod_name: &str) -> Result<(), &'static str> {
+    pub fn disable_mod(&mut self, mod_name: &str) {
         self.set_mod_enabled(mod_name, false)
     }
 
-    fn is_mod_installed(&self, mod_name: &str) -> bool {
-        self.get_mod(mod_name).is_some()
-    }
-
-    pub fn is_mod_enabled(&self, mod_name: &str) -> Result<&bool, &'static str> {
-        let res = self.get_mod(mod_name).ok_or("mod not installed")?.get_is_enabled();
-        Ok(res)
-    }
-
-    pub fn get_mod(&self, mod_name: &str) -> Option<&Mod> {
-        let Some(mods) = &self.mods else {
-            return None;
-        };
-
-        for m in mods {
-            if m.name == mod_name {
-                return Some(m)
-            }
+    pub fn is_mod_enabled(&self, mod_name: &String) -> bool {
+        match &self.mods {
+            Some(mods) => mods.contains(mod_name),
+            None => false
         }
-
-        None
     }
 
-    pub fn get_mod_mut(&mut self, mod_name: &str) -> Option<&mut Mod> {
-        let Some(mods) = &mut self.mods else {
-            return None;
-        };
-
-        for m in mods {
-            if m.name == mod_name {
-                return Some(m)
-            }
-        }
-
-        None
-    }
-
-    pub fn get_mods(&self) -> &Option<Vec<Mod>> {
+    pub fn get_enabled_mods(&self) -> &Option<Vec<String>> {
         &self.mods
-    }
-
-    pub fn get_enabled_mods(&self) -> Vec<&String> {
-        let Some(mods) = &self.mods else {
-            return Vec::new()
-        };
-
-        mods.iter().filter_map(|m| match m.get_is_enabled() {
-            true => Some(m.get_name()),
-            false => None
-        }).collect()
     }
 
     pub fn get_dir(&self) -> Result<PathBuf, ToryggError> {
