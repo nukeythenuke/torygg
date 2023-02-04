@@ -2,20 +2,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::{error, info};
-use crate::games::Game;
 use crate::{config, profile::Profile, util::verify_directory};
 use crate::error::ToryggError;
+use crate::games::Game;
 
 pub struct AppLauncher<'a> {
-    app: &'static dyn Game,
     profile: &'a Profile,
     mounted_paths: Vec<PathBuf>,
 }
 
 impl<'a> AppLauncher<'a> {
-    pub fn new(app: &'static dyn Game, profile: &'a Profile) -> Self {
+    pub fn new(profile: &'a Profile) -> Self {
         AppLauncher {
-            app,
             profile,
             mounted_paths: Vec::new(),
         }
@@ -83,7 +81,7 @@ impl<'a> AppLauncher<'a> {
         verify_directory(&work_path)?;
 
         // Mount data
-        let install_path = self.app.get_install_dir()?;
+        let install_path = self.profile.get_game().get_install_dir()?;
 
         let data_path = install_path.join("Data");
 
@@ -103,13 +101,13 @@ impl<'a> AppLauncher<'a> {
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
         // Mount config
-        let config_path = self.app.get_config_dir()?;
+        let config_path = self.profile.get_game().get_config_dir()?;
         let upper_path = config::get_data_dir().join("Configs");
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
-        let appdata_path = self.app.get_appdata_dir()?;
+        let appdata_path = self.profile.get_game().get_appdata_dir()?;
         let upper_path = config::get_data_dir().join("Configs");
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
@@ -120,7 +118,7 @@ impl<'a> AppLauncher<'a> {
     pub fn run(&mut self) -> Result<(), ToryggError> {
         self.mount_all()?;
 
-        let result = self.app.run();
+        let result = self.profile.get_game().run();
 
         info!("Game stopped");
 
@@ -189,7 +187,7 @@ impl<'a> AppLauncher<'a> {
     }
 }
 
-impl<'a> Drop for AppLauncher<'a> {
+impl Drop for AppLauncher<'_> {
     fn drop(&mut self) {
         info!("AppLauncher dropped");
         // Unmount directories

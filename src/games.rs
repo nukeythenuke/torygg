@@ -5,6 +5,7 @@ use log::info;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::error::ToryggError;
 
 pub trait Game {
@@ -23,7 +24,7 @@ pub trait Game {
 /// name: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
 /// executable: game executable
 /// mod_loader_executable: eg. skse64_loader.exe
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SteamApp {
     pub appid: usize,
     pub name: &'static str,
@@ -34,6 +35,19 @@ pub struct SteamApp {
 impl AsRef<SteamApp> for SteamApp {
     fn as_ref(&self) -> &SteamApp {
         self
+    }
+}
+
+impl Serialize for SteamApp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        serializer.serialize_str(self.get_name())
+    }
+}
+
+impl<'de> Deserialize<'de> for SteamApp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        let s = String::deserialize(deserializer)?;
+        std::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -177,13 +191,13 @@ pub const SKYRIM_SPECIAL_EDITION: SteamApp = SteamApp {
     mod_loader_executable: Some("skse64_loader.exe"),
 };
 
-impl std::str::FromStr for &SteamApp {
+impl std::str::FromStr for SteamApp {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
         Ok(match s {
-            "skyrim" => &SKYRIM,
-            "skyrimse" => &SKYRIM_SPECIAL_EDITION,
+            s if s == SKYRIM.get_name() || s == "skyrim" => SKYRIM,
+            s if s == SKYRIM_SPECIAL_EDITION.get_name() || s == "skyrimse" => SKYRIM_SPECIAL_EDITION,
             _ => anyhow::bail!("Unknown game \"{s}\""),
         })
     }

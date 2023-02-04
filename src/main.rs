@@ -6,10 +6,7 @@ use log::info;
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{
-    games,
-    applauncher::AppLauncher,
-    profile::{Profile, get_profiles}};
+use torygg::{games, applauncher::AppLauncher, profile::{Profile, get_profiles}, modmanager};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -19,7 +16,7 @@ struct Cli {
 
     /// The game to operate on
     #[arg(long)]
-    game: &'static games::SteamApp,
+    game: games::SteamApp,
 
     #[command(subcommand)]
     subcommand: Subcommands
@@ -153,12 +150,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Subcommands::Install { profile, archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            profile.install_mod(archive, name)?
+            modmanager::install_mod(profile.get_game(), archive, name)?
         },
 
         Subcommands::Uninstall { profile, name } => {
             info!("Uninstalling {name}");
-            profile.uninstall_mod(name)?
+            modmanager::uninstall_mod(profile.get_game(), name)?
         },
 
         Subcommands::Activate { profile, name } => {
@@ -175,7 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Subcommands::CreateMod { profile, name } => {
             info!("Creating new mod with name: {name}");
-            profile.create_mod(name)?;
+            modmanager::create_mod(profile.get_game(), name)?;
         },
 
         Subcommands::ListProfiles => {
@@ -205,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Subcommands::Run { profile } => {
             info!("Running the game");
-            let mut launcher = AppLauncher::new(cli.game, profile);
+            let mut launcher = AppLauncher::new(profile);
 
             launcher.run()?;
         },
