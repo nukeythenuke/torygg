@@ -178,7 +178,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Subcommands::ListProfiles => {
             info!("Listing profiles");
             for profile in get_profiles()? {
-                println!("{}", profile.get_name())
+                if *profile.get_game() == cli.game {
+                    println!("{}", profile.get_name())
+                }
             }
         },
 

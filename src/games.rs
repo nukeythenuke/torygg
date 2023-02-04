@@ -24,7 +24,7 @@ pub trait Game {
 /// name: Directory inside "$LIBRARY/steamapps/common" that the app is installed into
 /// executable: game executable
 /// mod_loader_executable: eg. skse64_loader.exe
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SteamApp {
     pub appid: usize,
     pub name: &'static str,
