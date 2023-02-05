@@ -73,8 +73,13 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), &'stat
     Ok(())
 }
 
-pub fn uninstall_mod<G>(game: &G, name: &str) -> Result<(), &'static str> where G: games::Game {
-    todo!()
-    // Remove mod from all profiles
-    // Delete mod files
+pub fn uninstall_mod<G>(game: &G, name: &str) -> Result<(), ToryggError> where G: games::Game {
+    // TODO: check mod is installed
+
+    for mut profile in crate::profile::get_profiles()? {
+        profile.disable_mod(name);
+    }
+
+    let mod_dir = config::get_mods_dir(game).join(name);
+    std::fs::remove_dir_all(mod_dir).map_err(ToryggError::IOError)
 }
