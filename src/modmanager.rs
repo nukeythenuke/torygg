@@ -4,7 +4,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
-use crate::{config, games};
+use crate::{config, games, modmanager};
 use crate::util::verify_directory;
 
 pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {
@@ -28,18 +28,21 @@ pub fn is_mod_installed<G>(game: &G, mod_name: &str) -> Result<bool, ToryggError
 }
 
 pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where G: games::Game {
-    // TODO: check mod name is not already used (installed already)
-    // Err(ToryggError::ModAlreadyExists)
+    if is_mod_installed(game, mod_name)? {
+        return Err(ToryggError::ModAlreadyExists);
+    }
 
     verify_directory(&config::get_mods_dir(game).join(mod_name))
 }
 
-pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), &'static str> where G: games::Game {
+pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), ToryggError> where G: games::Game {
     if !archive.exists() {
-        return Err("Archive does not exist!");
+        return Err(ToryggError::Other("Archive does not exist!".to_owned()));
     }
 
-    // TODO: check mod name is not already used (installed already)
+    if is_mod_installed(game, name)? {
+        return Err(ToryggError::ModAlreadyExists)
+    }
 
     let archive_extract_dir = TempDir::new().unwrap();
     let archive_extract_path = archive_extract_dir.into_path();
@@ -50,16 +53,16 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), &'stat
     command.arg(format!("-o{}", archive_extract_path.display()));
     command.arg(archive);
 
-    let status = command.status().map_err(|_| "Unable to extract archive")?;
+    let status = command.status().map_err(ToryggError::IOError)?;
     if !status.success() {
-        return Err("Unable to extract archive");
+        return Err(ToryggError::Other("Unable to extract archive".to_owned()));
     }
 
     // Detect if mod is contained within a subdirectory
     // and move it if it is
     let mut mod_root = archive_extract_path;
     let entries = fs::read_dir(&mod_root)
-        .map_err(|_| "Couldn't read dir")?
+        .map_err(ToryggError::IOError)?
         .filter_map(|e| e.ok())
         .collect::<Vec<fs::DirEntry>>();
     if entries.len() == 1 {

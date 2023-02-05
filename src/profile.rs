@@ -95,7 +95,7 @@ impl Profile {
             if mods.is_empty() {
                 self.mods = None;
             }
-            
+
             self.write().unwrap();
         }
     }
