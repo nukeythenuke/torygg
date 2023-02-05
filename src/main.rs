@@ -137,14 +137,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
-            let Some(mods) = profile.get_enabled_mods() else {
+            let mods = modmanager::get_installed_mods(&cli.game)?;
+            if mods.is_empty() {
                 println!("No mods.");
                 return Ok(());
             };
 
             println!("Mods");
             for m in mods {
-                println!("{}{}", if profile.is_mod_enabled(m) { "*" } else { "" }, m)
+                println!("{}{}", if profile.is_mod_enabled(&m) { "*" } else { "" }, m)
             }
             
         },
