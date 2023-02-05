@@ -23,6 +23,10 @@ pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where
     Ok(mods)
 }
 
+pub fn is_mod_installed<G>(game: &G, mod_name: &str) -> Result<bool, ToryggError> where G: games::Game {
+    Ok(get_installed_mods(game)?.iter().any(|installed| installed == mod_name))
+}
+
 pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where G: games::Game {
     // TODO: check mod name is not already used (installed already)
     // Err(ToryggError::ModAlreadyExists)
