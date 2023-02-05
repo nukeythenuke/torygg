@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use crate::error::ToryggError;
-use crate::config;
+use crate::{config, modmanager};
 use crate::games::SteamApp;
 use crate::util::verify_directory;
 
@@ -74,7 +74,9 @@ impl Profile {
     }
 
     fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) {
-        // TODO: Check if mod is installed
+        if !modmanager::is_mod_installed(&self.game, mod_name).unwrap() {
+            return;
+        }
 
         if self.mods.is_none() {
             self.mods = Some(Vec::new());
@@ -86,9 +88,15 @@ impl Profile {
         if enabled {
             if !mods.contains(&mod_name.to_owned()) {
                 mods.push(mod_name.to_owned());
+                self.write().unwrap();
             }
         } else if mods.contains(&mod_name.to_owned()) {
             *mods = mods.clone().into_iter().filter(|name| name != mod_name).collect();
+            if mods.is_empty() {
+                self.mods = None;
+            }
+            
+            self.write().unwrap();
         }
     }
 
