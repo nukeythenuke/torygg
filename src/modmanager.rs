@@ -7,6 +7,22 @@ use crate::error::ToryggError;
 use crate::{config, games};
 use crate::util::verify_directory;
 
+pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {
+    let mut mods = Vec::new();
+    for entry in config::get_mods_dir(game).read_dir().map_err(ToryggError::IOError)? {
+        let entry = entry.map_err(ToryggError::IOError)?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        mods.push(path.file_name().unwrap().to_string_lossy().to_string())
+    }
+
+    Ok(mods)
+}
+
 pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where G: games::Game {
     // TODO: check mod name is not already used (installed already)
     // Err(ToryggError::ModAlreadyExists)
