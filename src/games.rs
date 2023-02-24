@@ -81,7 +81,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
             .join(self.as_ref().appid.to_string())
             .join("pfx");
 
-        if path.exists() {
+        if !path.exists() {
             Err(ToryggError::PrefixNotFound)
         } else {
             Ok(Prefix::new(path))

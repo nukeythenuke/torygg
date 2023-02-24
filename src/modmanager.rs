@@ -4,7 +4,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
-use crate::{config, games, modmanager};
+use crate::{config, games};
 use crate::util::verify_directory;
 
 pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {

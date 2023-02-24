@@ -131,10 +131,8 @@ impl Profile {
         Ok(dir)
     }
 
-    pub fn get_mods_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = self.get_dir()?.join("Mods");
-        verify_directory(&dir)?;
-        Ok(dir)
+    pub fn get_mods_dir(&self) -> Result<&PathBuf, ToryggError> {
+        Ok(config::get_mods_dir(&self.game))
     }
 
     pub fn get_overwrite_dir(&self) -> Result<PathBuf, ToryggError> {

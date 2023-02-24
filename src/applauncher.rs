@@ -103,12 +103,14 @@ impl<'a> AppLauncher<'a> {
         // Mount config
         let config_path = self.profile.get_game().get_config_dir()?;
         let upper_path = config::get_data_dir().join("Configs");
+        verify_directory(&upper_path)?;
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
         let appdata_path = self.profile.get_game().get_appdata_dir()?;
-        let upper_path = config::get_data_dir().join("Configs");
+        let upper_path = config::get_data_dir().join("Plugins");
+        verify_directory(&upper_path)?;
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
 
