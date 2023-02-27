@@ -7,9 +7,9 @@ use crate::error::ToryggError;
 use crate::{config, games};
 use crate::util::verify_directory;
 
-pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {
+pub fn installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {
     let mut mods = Vec::new();
-    for entry in config::get_mods_dir(game).read_dir().map_err(ToryggError::IOError)? {
+    for entry in config::mods_dir(game).read_dir().map_err(ToryggError::IOError)? {
         let entry = entry.map_err(ToryggError::IOError)?;
         let path = entry.path();
 
@@ -23,16 +23,16 @@ pub fn get_installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where
     Ok(mods)
 }
 
-pub fn is_mod_installed<G>(game: &G, mod_name: &str) -> Result<bool, ToryggError> where G: games::Game {
-    Ok(get_installed_mods(game)?.iter().any(|installed| installed == mod_name))
+pub fn mod_installed<G>(game: &G, mod_name: &str) -> Result<bool, ToryggError> where G: games::Game {
+    Ok(installed_mods(game)?.iter().any(|installed| installed == mod_name))
 }
 
 pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where G: games::Game {
-    if is_mod_installed(game, mod_name)? {
+    if mod_installed(game, mod_name)? {
         return Err(ToryggError::ModAlreadyExists);
     }
 
-    verify_directory(&config::get_mods_dir(game).join(mod_name))
+    verify_directory(&config::mods_dir(game).join(mod_name))
 }
 
 pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), ToryggError> where G: games::Game {
@@ -40,7 +40,7 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
         return Err(ToryggError::Other("Archive does not exist!".to_owned()));
     }
 
-    if is_mod_installed(game, name)? {
+    if mod_installed(game, name)? {
         return Err(ToryggError::ModAlreadyExists)
     }
 
@@ -75,7 +75,7 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
     // This is where we would want to handle FOMODS
 
     // Copy all files in the mod root to the installed mods directory
-    let install_path = config::get_mods_dir(game).join(name);
+    let install_path = config::mods_dir(game).join(name);
     verify_directory(&install_path).unwrap();
     for entry in WalkDir::new(&mod_root)
         .min_depth(1)
@@ -99,10 +99,10 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
 pub fn uninstall_mod<G>(game: &G, name: &str) -> Result<(), ToryggError> where G: games::Game {
     // TODO: check mod is installed
 
-    for mut profile in crate::profile::get_profiles()? {
+    for mut profile in crate::profile::profiles()? {
         profile.disable_mod(name);
     }
 
-    let mod_dir = config::get_mods_dir(game).join(name);
+    let mod_dir = config::mods_dir(game).join(name);
     std::fs::remove_dir_all(mod_dir).map_err(ToryggError::IOError)
 }

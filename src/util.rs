@@ -3,12 +3,12 @@ use crate::games;
 use std::path::Path;
 use std::{fs, fs::File, iter::FromIterator, path::PathBuf};
 
-pub fn get_libraryfolders_vdf() -> PathBuf {
+pub fn libraryfolders_vdf() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
 }
 
-pub fn get_steam_library(app: &games::SteamApp) -> Result<PathBuf, ToryggError> {
-    let vdf = get_libraryfolders_vdf();
+pub fn steam_library(app: &games::SteamApp) -> Result<PathBuf, ToryggError> {
+    let vdf = libraryfolders_vdf();
     let mut file = File::open(vdf)?;
     let kvs = torygg_vdf::parse(&mut file)?;
 

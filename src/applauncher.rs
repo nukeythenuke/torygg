@@ -77,17 +77,17 @@ impl<'a> AppLauncher<'a> {
     }
 
     fn mount_all(&mut self) -> Result<(), ToryggError> {
-        let work_path = config::get_data_dir().join(".OverlayFS");
+        let work_path = config::data_dir().join(".OverlayFS");
         verify_directory(&work_path)?;
 
         // Mount data
-        let install_path = self.profile.get_game().get_install_dir()?;
+        let install_path = self.profile.game().install_dir()?;
 
         let data_path = install_path.join("Data");
 
-        let mut mod_paths = match self.profile.get_enabled_mods() {
+        let mut mod_paths = match self.profile.enabled_mods() {
             Some(mods) => {
-                let mods_path = self.profile.get_mods_dir()?;
+                let mods_path = self.profile.mods_dir()?;
                 mods.into_iter()
                     .map(|m| mods_path.join(m))
                     .collect::<Vec<_>>()
@@ -96,20 +96,20 @@ impl<'a> AppLauncher<'a> {
         };
 
 
-        let override_path = self.profile.get_overwrite_dir()?;
+        let override_path = self.profile.overwrite_dir()?;
 
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
         // Mount config
-        let config_path = self.profile.get_game().get_config_dir()?;
-        let upper_path = config::get_data_dir().join("Configs");
+        let config_path = self.profile.game().config_dir()?;
+        let upper_path = config::data_dir().join("Configs");
         verify_directory(&upper_path)?;
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
-        let appdata_path = self.profile.get_game().get_appdata_dir()?;
-        let upper_path = config::get_data_dir().join("Plugins");
+        let appdata_path = self.profile.game().appdata_dir()?;
+        let upper_path = config::data_dir().join("Plugins");
         verify_directory(&upper_path)?;
 
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
@@ -120,7 +120,7 @@ impl<'a> AppLauncher<'a> {
     pub fn run(&mut self) -> Result<(), ToryggError> {
         self.mount_all()?;
 
-        let result = self.profile.get_game().run();
+        let result = self.profile.game().run();
 
         info!("Game stopped");
 

@@ -6,7 +6,7 @@ use log::info;
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{games, applauncher::AppLauncher, profile::{Profile, get_profiles}, modmanager};
+use torygg::{games, applauncher::AppLauncher, profile::{Profile, profiles}, modmanager};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
-            let mods = modmanager::get_installed_mods(&cli.game)?;
+            let mods = modmanager::installed_mods(&cli.game)?;
             if mods.is_empty() {
                 println!("No mods.");
                 return Ok(());
@@ -145,18 +145,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Mods");
             for m in mods {
-                println!("{}{}", if profile.is_mod_enabled(&m) { "*" } else { "" }, m)
+                println!("{}{}", if profile.mod_enabled(&m) { "*" } else { "" }, m)
             }
             
         },
         Subcommands::Install { profile, archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            modmanager::install_mod(profile.get_game(), archive, name)?
+            modmanager::install_mod(profile.game(), archive, name)?
         },
 
         Subcommands::Uninstall { profile, name } => {
             info!("Uninstalling {name}");
-            modmanager::uninstall_mod(profile.get_game(), name)?
+            modmanager::uninstall_mod(profile.game(), name)?
         },
 
         Subcommands::Activate { profile, name } => {
@@ -173,14 +173,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Subcommands::CreateMod { profile, name } => {
             info!("Creating new mod with name: {name}");
-            modmanager::create_mod(profile.get_game(), name)?;
+            modmanager::create_mod(profile.game(), name)?;
         },
 
         Subcommands::ListProfiles => {
             info!("Listing profiles");
-            for profile in get_profiles()? {
-                if *profile.get_game() == cli.game {
-                    println!("{}", profile.get_name())
+            for profile in profiles()? {
+                if *profile.game() == cli.game {
+                    println!("{}", profile.name())
                 }
             }
         },
@@ -191,14 +191,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
 
         Subcommands::DeleteProfile { profile } => {
-            info!("Deleting profile with name: {}", profile.get_name());
-            let dir = profile.get_dir()?;
+            info!("Deleting profile with name: {}", profile.name());
+            let dir = profile.dir()?;
             fs::remove_dir_all(dir)?;
         }
 
         Subcommands::Overwrite { profile } => {
             info!("Listing overwrite directory contents");
-            for e in WalkDir::new(profile.get_overwrite_dir()?).min_depth(1) {
+            for e in WalkDir::new(profile.overwrite_dir()?).min_depth(1) {
                 println!("{}", e?.path().display());
             }
         },

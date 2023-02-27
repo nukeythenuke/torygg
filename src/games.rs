@@ -9,15 +9,15 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::error::ToryggError;
 
 pub trait Game {
-    fn get_install_dir(&self) -> Result<PathBuf, ToryggError>;
-    fn get_executable(&self) -> Result<PathBuf, ToryggError>;
-    fn get_wine_pfx(&self) -> Result<Prefix, ToryggError>;
-    fn get_name(&self) -> &'static str;
+    fn install_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn executable(&self) -> Result<PathBuf, ToryggError>;
+    fn wine_pfx(&self) -> Result<Prefix, ToryggError>;
+    fn name(&self) -> &'static str;
     fn run(&self) -> Result<(), ToryggError>;
-    fn get_wine_user_dir(&self) -> Result<PathBuf, ToryggError>;
-    fn get_config_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn wine_user_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn config_dir(&self) -> Result<PathBuf, ToryggError>;
     // Folder where profile Plugins.txt is kept
-    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError>;
+    fn appdata_dir(&self) -> Result<PathBuf, ToryggError>;
 }
 
 /// appid: Steam app id
@@ -40,7 +40,7 @@ impl AsRef<SteamApp> for SteamApp {
 
 impl Serialize for SteamApp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        serializer.serialize_str(self.get_name())
+        serializer.serialize_str(self.name())
     }
 }
 
@@ -52,8 +52,8 @@ impl<'de> Deserialize<'de> for SteamApp {
 }
 
 impl<S> Game for S where S: AsRef<SteamApp> {
-    fn get_install_dir(&self) -> Result<PathBuf, ToryggError> {
-        let path = util::get_steam_library(self.as_ref())?
+    fn install_dir(&self) -> Result<PathBuf, ToryggError> {
+        let path = util::steam_library(self.as_ref())?
             .join("steamapps/common")
             .join(self.as_ref().name);
 
@@ -63,8 +63,8 @@ impl<S> Game for S where S: AsRef<SteamApp> {
             Err(ToryggError::DirectoryNotFound(path))
         }
     }
-    fn get_executable(&self) -> Result<PathBuf, ToryggError> {
-        let install_dir = self.get_install_dir()?;
+    fn executable(&self) -> Result<PathBuf, ToryggError> {
+        let install_dir = self.install_dir()?;
         if let Some(mle) = self.as_ref().mod_loader_executable {
             let mle_path = install_dir.join(mle);
             if mle_path.exists() {
@@ -75,8 +75,8 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         Ok(install_dir.join(self.as_ref().executable))
     }
 
-    fn get_wine_pfx(&self) -> Result<Prefix, ToryggError> {
-        let path = util::get_steam_library(self.as_ref())?
+    fn wine_pfx(&self) -> Result<Prefix, ToryggError> {
+        let path = util::steam_library(self.as_ref())?
             .join("steamapps/compatdata")
             .join(self.as_ref().appid.to_string())
             .join("pfx");
@@ -88,13 +88,13 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         }
     }
 
-    fn get_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         self.as_ref().name
     }
 
     fn run(&self) -> Result<(), ToryggError> {
-        let install_dir = self.get_install_dir().unwrap();
-        let executable = self.get_executable().unwrap();
+        let install_dir = self.install_dir().unwrap();
+        let executable = self.executable().unwrap();
 
         info!("Starting protontricks");
         let mut cmd = Command::new("protontricks");
@@ -132,7 +132,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         Ok(())
     }
 
-    fn get_wine_user_dir(&self) -> Result<PathBuf, ToryggError> {
+    fn wine_user_dir(&self) -> Result<PathBuf, ToryggError> {
         // Prioritise a path specified via environment variable
         if let Some(str) = std::env::var_os("TORYGG_USER_DIRECTORY") {
             let path = PathBuf::from(str);
@@ -143,7 +143,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
             }
         }
 
-        let mut path = self.get_wine_pfx()?
+        let mut path = self.wine_pfx()?
             .pfx;
         path.push("drive_c/users");
 
@@ -167,14 +167,14 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         Err(ToryggError::Other("wine user dir not found".to_owned()))
     }
 
-    fn get_config_dir(&self) -> Result<PathBuf, ToryggError> {
-        Ok(self.get_wine_user_dir()?.join(String::from("My Documents/My Games/") + self.get_name()))
+    fn config_dir(&self) -> Result<PathBuf, ToryggError> {
+        Ok(self.wine_user_dir()?.join(String::from("My Documents/My Games/") + self.name()))
     }
 
     // Folder where profile Plugins.txt is kept
-    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError> {
-        Ok(self.get_wine_user_dir()?
-            .join(String::from("Local Settings/Application Data/") + self.get_name()))
+    fn appdata_dir(&self) -> Result<PathBuf, ToryggError> {
+        Ok(self.wine_user_dir()?
+            .join(String::from("Local Settings/Application Data/") + self.name()))
     }
 }
 
@@ -196,8 +196,8 @@ impl std::str::FromStr for SteamApp {
 
     fn from_str(s: &str) -> Result<Self, <Self as std::str::FromStr>::Err> {
         Ok(match s {
-            s if s == SKYRIM.get_name() || s == "skyrim" => SKYRIM,
-            s if s == SKYRIM_SPECIAL_EDITION.get_name() || s == "skyrimse" => SKYRIM_SPECIAL_EDITION,
+            s if s == SKYRIM.name() || s == "skyrim" => SKYRIM,
+            s if s == SKYRIM_SPECIAL_EDITION.name() || s == "skyrimse" => SKYRIM_SPECIAL_EDITION,
             _ => anyhow::bail!("Unknown game \"{s}\""),
         })
     }

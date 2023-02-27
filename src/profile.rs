@@ -19,8 +19,8 @@ impl std::str::FromStr for Profile {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for profile in get_profiles().map_err(|e| anyhow!(e))? {
-            if profile.get_name() == s {
+        for profile in profiles().map_err(|e| anyhow!(e))? {
+            if profile.name() == s {
                 return Ok(profile)
             }
         }
@@ -31,7 +31,7 @@ impl std::str::FromStr for Profile {
 
 impl Profile {
     pub fn new(profile_name: &str, game: SteamApp) -> Result<Profile, ToryggError> {
-        let path = config::get_config_dir().join(profile_name);
+        let path = config::config_dir().join(profile_name);
         if path.exists() {
             return Err(ToryggError::ProfileAlreadyExists)
         }
@@ -48,17 +48,17 @@ impl Profile {
             Err(e) => return Err(ToryggError::Other(e.to_string()))
         };
 
-        match std::fs::write(self.get_dir()?.join("profile.toml"), string) {
+        match std::fs::write(self.dir()?.join("profile.toml"), string) {
             Ok(_) => Ok(()),
             Err(e) => Err(ToryggError::IOError(e))
         }
     }
 
-    pub  fn get_game(&self) -> &SteamApp {
+    pub  fn game(&self) -> &SteamApp {
         &self.game
     }
 
-    pub fn get_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
@@ -74,7 +74,7 @@ impl Profile {
     }
 
     fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) {
-        if !modmanager::is_mod_installed(&self.game, mod_name).unwrap() {
+        if !modmanager::mod_installed(&self.game, mod_name).unwrap() {
             return;
         }
 
@@ -108,42 +108,42 @@ impl Profile {
         self.set_mod_enabled(mod_name, false)
     }
 
-    pub fn is_mod_enabled(&self, mod_name: &String) -> bool {
+    pub fn mod_enabled(&self, mod_name: &String) -> bool {
         match &self.mods {
             Some(mods) => mods.contains(mod_name),
             None => false
         }
     }
 
-    pub fn get_enabled_mods(&self) -> &Option<Vec<String>> {
+    pub fn enabled_mods(&self) -> &Option<Vec<String>> {
         &self.mods
     }
 
-    pub fn get_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = config::get_config_dir().join(&self.name);
+    pub fn dir(&self) -> Result<PathBuf, ToryggError> {
+        let dir = config::config_dir().join(&self.name);
         verify_directory(&dir)?;
         Ok(dir)
     }
 
-    fn get_appdata_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = self.get_dir()?.join("AppData");
+    fn appdata_dir(&self) -> Result<PathBuf, ToryggError> {
+        let dir = self.dir()?.join("AppData");
         verify_directory(&dir)?;
         Ok(dir)
     }
 
-    pub fn get_mods_dir(&self) -> Result<&PathBuf, ToryggError> {
-        Ok(config::get_mods_dir(&self.game))
+    pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {
+        Ok(config::mods_dir(&self.game))
     }
 
-    pub fn get_overwrite_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = self.get_dir()?.join("Overwrite");
+    pub fn overwrite_dir(&self) -> Result<PathBuf, ToryggError> {
+        let dir = self.dir()?.join("Overwrite");
         verify_directory(&dir)?;
         Ok(dir)
     }
 }
 
-pub fn get_profiles() -> Result<Vec<Profile>, ToryggError> {
-    Ok(fs::read_dir(config::get_config_dir())?
+pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
+    Ok(fs::read_dir(config::config_dir())?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             if e.is_dir() {
