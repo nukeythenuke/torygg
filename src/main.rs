@@ -145,24 +145,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Mods");
             for m in mods {
-                println!("{}{}", if profile.mod_enabled(&m) { "*" } else { "" }, m)
+                println!("{}{}", if profile.mod_enabled(&m) { "*" } else { "" }, m);
             }
             
         },
         Subcommands::Install { profile, archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            modmanager::install_mod(profile.game(), archive, name)?
+            modmanager::install_mod(profile.game(), archive, name)?;
         },
 
         Subcommands::Uninstall { profile, name } => {
             info!("Uninstalling {name}");
-            modmanager::uninstall_mod(profile.game(), name)?
+            modmanager::uninstall_mod(profile.game(), name)?;
         },
 
         Subcommands::Activate { profile, name } => {
             info!("Activating {name}");
             let mut profile = profile.clone();
-            profile.enable_mod(name)
+            profile.enable_mod(name);
         },
 
         Subcommands::Deactivate { profile, name } => {
@@ -180,7 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Listing profiles");
             for profile in profiles()? {
                 if *profile.game() == cli.game {
-                    println!("{}", profile.name())
+                    println!("{}", profile.name());
                 }
             }
         },

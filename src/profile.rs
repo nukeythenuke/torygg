@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use crate::error::ToryggError;
@@ -48,22 +48,24 @@ impl Profile {
             Err(e) => return Err(ToryggError::Other(e.to_string()))
         };
 
-        match std::fs::write(self.dir()?.join("profile.toml"), string) {
-            Ok(_) => Ok(()),
+        match fs::write(self.dir()?.join("profile.toml"), string) {
+            Ok(()) => Ok(()),
             Err(e) => Err(ToryggError::IOError(e))
         }
     }
 
+    #[must_use]
     pub  fn game(&self) -> &SteamApp {
         &self.game
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn from_dir(profile_dir: PathBuf) -> Result<Profile, ToryggError> {
-        let Ok(profile_string) = std::fs::read_to_string(profile_dir.join("profile.toml")) else {
+    pub fn from_dir(profile_dir: &Path) -> Result<Profile, ToryggError> {
+        let Ok(profile_string) = fs::read_to_string(profile_dir.join("profile.toml")) else {
             return Err(ToryggError::Other("failed to read profile.toml".to_owned()));
         };
 
@@ -101,13 +103,14 @@ impl Profile {
     }
 
     pub fn enable_mod(&mut self, mod_name: &str) {
-        self.set_mod_enabled(mod_name, true)
+        self.set_mod_enabled(mod_name, true);
     }
 
     pub fn disable_mod(&mut self, mod_name: &str) {
-        self.set_mod_enabled(mod_name, false)
+        self.set_mod_enabled(mod_name, false);
     }
 
+    #[must_use]
     pub fn mod_enabled(&self, mod_name: &String) -> bool {
         match &self.mods {
             Some(mods) => mods.contains(mod_name),
@@ -115,6 +118,7 @@ impl Profile {
         }
     }
 
+    #[must_use]
     pub fn enabled_mods(&self) -> &Option<Vec<String>> {
         &self.mods
     }
@@ -125,7 +129,7 @@ impl Profile {
         Ok(dir)
     }
 
-    fn appdata_dir(&self) -> Result<PathBuf, ToryggError> {
+    pub fn appdata_dir(&self) -> Result<PathBuf, ToryggError> {
         let dir = self.dir()?.join("AppData");
         verify_directory(&dir)?;
         Ok(dir)
@@ -147,7 +151,7 @@ pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             if e.is_dir() {
-                Profile::from_dir(e).ok()
+                Profile::from_dir(&e).ok()
             } else {
                 None
             }

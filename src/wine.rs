@@ -8,6 +8,7 @@ pub struct Prefix {
 }
 
 impl Prefix {
+    #[must_use]
     pub fn new(pfx: PathBuf) -> Prefix {
         // TODO: Find the correct wine executable
         let wine_exec = PathBuf::from("/usr/bin/wine");

@@ -17,7 +17,7 @@ pub fn installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: 
             continue;
         }
 
-        mods.push(path.file_name().unwrap().to_string_lossy().to_string())
+        mods.push(path.file_name().unwrap().to_string_lossy().to_string());
     }
 
     Ok(mods)
@@ -63,12 +63,12 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
     let mut mod_root = archive_extract_path;
     let entries = fs::read_dir(&mod_root)
         .map_err(ToryggError::IOError)?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .collect::<Vec<fs::DirEntry>>();
     if entries.len() == 1 {
         let path = entries[0].path();
         if path.is_dir() {
-            mod_root = path
+            mod_root = path;
         }
     }
 
@@ -80,7 +80,7 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
     for entry in WalkDir::new(&mod_root)
         .min_depth(1)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
     {
         let from = entry.path();
         let relative_path = from.strip_prefix(&mod_root).unwrap();
@@ -104,5 +104,5 @@ pub fn uninstall_mod<G>(game: &G, name: &str) -> Result<(), ToryggError> where G
     }
 
     let mod_dir = config::mods_dir(game).join(name);
-    std::fs::remove_dir_all(mod_dir).map_err(ToryggError::IOError)
+    fs::remove_dir_all(mod_dir).map_err(ToryggError::IOError)
 }

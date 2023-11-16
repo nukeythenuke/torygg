@@ -1,8 +1,9 @@
 use crate::error::ToryggError;
 use crate::games;
 use std::path::Path;
-use std::{fs, fs::File, iter::FromIterator, path::PathBuf};
+use std::{fs, fs::File, path::PathBuf};
 
+#[must_use]
 pub fn libraryfolders_vdf() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap()).join(".steam/root/config/libraryfolders.vdf")
 }
@@ -19,7 +20,7 @@ pub fn steam_library(app: &games::SteamApp) -> Result<PathBuf, ToryggError> {
         if let Some(component) = components.get(3) {
             if *component == app.appid.to_string().as_str() {
                 // libraryfolders/<lib_id>/path
-                let path = PathBuf::from_iter(kv.0.iter().take(2)).join("path");
+                let path = kv.0.iter().take(2).collect::<PathBuf>().join("path");
 
                 return Ok(kvs[&path].clone().into());
             }
@@ -31,10 +32,10 @@ pub fn steam_library(app: &games::SteamApp) -> Result<PathBuf, ToryggError> {
 
 pub fn verify_directory(path: &Path) -> Result<(), ToryggError> {
     if path.exists() {
-        return if !path.is_dir() {
-            Err(ToryggError::NotADirectory(path.to_owned()))
-        } else {
+        return if path.is_dir() {
             Ok(())
+        } else {
+            Err(ToryggError::NotADirectory(path.to_owned()))
         };
     }
 

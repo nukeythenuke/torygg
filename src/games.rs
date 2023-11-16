@@ -81,10 +81,10 @@ impl<S> Game for S where S: AsRef<SteamApp> {
             .join(self.as_ref().appid.to_string())
             .join("pfx");
 
-        if !path.exists() {
-            Err(ToryggError::PrefixNotFound)
-        } else {
+        if path.exists() {
             Ok(Prefix::new(path))
+        } else {
+            Err(ToryggError::PrefixNotFound)
         }
     }
 
@@ -102,10 +102,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         cmd.arg("shell");
         cmd.stdin(Stdio::piped());
 
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(_) => return Err(ToryggError::FailedToSpawnChild),
-        };
+        let Ok(mut child) = cmd.spawn() else { return Err(ToryggError::FailedToSpawnChild) };
 
         child
             .stdin
@@ -120,10 +117,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
                 .as_bytes(),
             )?;
 
-        let status = match child.wait() {
-            Ok(status) => status,
-            Err(_) => return Err(ToryggError::ChildFailed),
-        };
+        let Ok(status) = child.wait() else { return Err(ToryggError::ChildFailed) };
 
         if !status.success() {
             return Err(ToryggError::ChildFailed);

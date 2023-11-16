@@ -12,6 +12,7 @@ pub struct AppLauncher<'a> {
 }
 
 impl<'a> AppLauncher<'a> {
+    #[must_use]
     pub fn new(profile: &'a Profile) -> Self {
         AppLauncher {
             profile,
@@ -56,15 +57,9 @@ impl<'a> AppLauncher<'a> {
         ));
         cmd.arg(path);
 
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(_) => return Err(ToryggError::FailedToSpawnChild),
-        };
+        let Ok(mut child) = cmd.spawn() else { return Err(ToryggError::FailedToSpawnChild) };
 
-        let status = match child.wait() {
-            Ok(status) => status,
-            Err(_) => return Err(ToryggError::ChildFailed),
-        };
+        let Ok(status) = child.wait() else { return Err(ToryggError::ChildFailed) };
 
         if !status.success() {
             return Err(ToryggError::ChildFailed);
@@ -88,7 +83,7 @@ impl<'a> AppLauncher<'a> {
         let mut mod_paths = match self.profile.enabled_mods() {
             Some(mods) => {
                 let mods_path = self.profile.mods_dir()?;
-                mods.into_iter()
+                mods.iter()
                     .map(|m| mods_path.join(m))
                     .collect::<Vec<_>>()
             }
@@ -129,47 +124,37 @@ impl<'a> AppLauncher<'a> {
 
     fn unmount_all(&mut self) -> Result<(), ToryggError> {
         info!("Unmounting paths");
-        if !self.mounted_paths.is_empty() {
+        if self.mounted_paths.is_empty() {
+            info!("No dirs to unmount.");
+            Ok(())
+        } else {
             self.mounted_paths.retain(|path| {
                 info!("--> {:?}", path);
                 let mut cmd = Command::new("umount");
                 cmd.arg(path);
 
-                let mut child = match cmd.spawn() {
-                    Ok(child) => child,
-                    Err(_) => return true,
-                };
+                let Ok(mut child) = cmd.spawn() else { return true };
 
-                let status = match child.wait() {
-                    Ok(status) => status,
-                    Err(_) => return true,
-                };
+                let Ok(status) = child.wait() else { return true };
 
                 if !status.success() {
                     return true;
                 }
 
                 let err = "Failed to restore path";
-                let last_component = match path.iter().last() {
-                    Some(component) => component,
-                    None => {
-                        error!("{}", err);
-                        return false;
-                    }
-                }
-                    .to_string_lossy()
-                    .to_string();
+                let Some(last_component) = path.iter().last() else {
+                    error!("{}", err);
+                    return false;
+                };
+                let last_component = last_component.to_string_lossy().to_string();
 
-                let backup_path = match path.parent() {
-                    Some(path) => path,
-                    None => {
-                        error!("{}", err);
-                        return false;
-                    }
-                }
-                    .join(last_component + "~");
+                let Some(backup_path) = path.parent() else {
+                    error!("{}", err);
+                    return false;
+                };
+                let backup_path = backup_path.join(last_component + "~");
 
-                if fs::rename(&backup_path, path).is_err() {
+                if fs::rename(backup_path, path).is_err() {
                     error!("{}", err);
                 }
 
@@ -182,9 +167,6 @@ impl<'a> AppLauncher<'a> {
                 error!("Failed to unmount: {:?}", self.mounted_paths);
                 Err(ToryggError::Other("Failed to unmount directories".to_owned()))
             }
-        } else {
-            info!("No dirs to unmount.");
-            Ok(())
         }
     }
 }
