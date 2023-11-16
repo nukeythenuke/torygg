@@ -1,19 +1,14 @@
 use std::collections::HashMap;
 use crate::util;
-use crate::wine::Prefix;
-use log::info;
-use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::error::ToryggError;
 
 pub trait Game {
     fn install_dir(&self) -> Result<PathBuf, ToryggError>;
     fn executable(&self) -> Result<PathBuf, ToryggError>;
-    fn wine_pfx(&self) -> Result<Prefix, ToryggError>;
+    fn wine_pfx(&self) -> Result<PathBuf, ToryggError>;
     fn name(&self) -> &'static str;
-    fn run(&self) -> Result<(), ToryggError>;
     fn wine_user_dir(&self) -> Result<PathBuf, ToryggError>;
     fn config_dir(&self) -> Result<PathBuf, ToryggError>;
     // Folder where profile Plugins.txt is kept
@@ -75,14 +70,14 @@ impl<S> Game for S where S: AsRef<SteamApp> {
         Ok(install_dir.join(self.as_ref().executable))
     }
 
-    fn wine_pfx(&self) -> Result<Prefix, ToryggError> {
+    fn wine_pfx(&self) -> Result<PathBuf, ToryggError> {
         let path = util::steam_library(self.as_ref())?
             .join("steamapps/compatdata")
             .join(self.as_ref().appid.to_string())
             .join("pfx");
 
         if path.exists() {
-            Ok(Prefix::new(path))
+            Ok(path)
         } else {
             Err(ToryggError::PrefixNotFound)
         }
@@ -90,40 +85,6 @@ impl<S> Game for S where S: AsRef<SteamApp> {
 
     fn name(&self) -> &'static str {
         self.as_ref().name
-    }
-
-    fn run(&self) -> Result<(), ToryggError> {
-        let install_dir = self.install_dir().unwrap();
-        let executable = self.executable().unwrap();
-
-        info!("Starting protontricks");
-        let mut cmd = Command::new("protontricks");
-        cmd.arg(self.as_ref().appid.to_string());
-        cmd.arg("shell");
-        cmd.stdin(Stdio::piped());
-
-        let Ok(mut child) = cmd.spawn() else { return Err(ToryggError::FailedToSpawnChild) };
-
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(
-                format!(
-                    "cd \"{}\" && wine \"{}\"\n",
-                    install_dir.display(),
-                    executable.display()
-                )
-                .as_bytes(),
-            )?;
-
-        let Ok(status) = child.wait() else { return Err(ToryggError::ChildFailed) };
-
-        if !status.success() {
-            return Err(ToryggError::ChildFailed);
-        }
-
-        Ok(())
     }
 
     fn wine_user_dir(&self) -> Result<PathBuf, ToryggError> {
@@ -137,8 +98,7 @@ impl<S> Game for S where S: AsRef<SteamApp> {
             }
         }
 
-        let mut path = self.wine_pfx()?
-            .pfx;
+        let mut path = self.wine_pfx()?;
         path.push("drive_c/users");
 
         // When run through proton username is steamuser

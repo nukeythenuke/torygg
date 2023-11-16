@@ -6,7 +6,8 @@ use log::info;
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{games, applauncher::AppLauncher, profile::{Profile, profiles}, modmanager};
+use torygg::{games, profile::{Profile, profiles}, modmanager};
+use torygg::applauncher::AppLauncher;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -104,16 +105,16 @@ enum Subcommands {
         profile: Profile,
     },
 
-    /// launch the game with mods
-    Run {
-        /// profile to run
+    /// view the contents of the overwrite directory
+    Overwrite {
+        /// profile which to show the overwrite directory of
         #[arg(long)]
         profile: Profile,
     },
 
-    /// view the contents of the overwrite directory
-    Overwrite {
-        /// profile which to show the overwrite directory of
+    /// mount the modded directories, use ctrl-c to unmount
+    Mount {
+        /// profile to mount
         #[arg(long)]
         profile: Profile,
     },
@@ -203,11 +204,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
 
-        Subcommands::Run { profile } => {
-            info!("Running the game");
+        Subcommands::Mount {profile } => {
+            info!("Mounting modded directories");
             let mut launcher = AppLauncher::new(profile);
-
-            launcher.run()?;
+            launcher.mount_all()?;
         },
     }
 

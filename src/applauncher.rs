@@ -71,7 +71,7 @@ impl<'a> AppLauncher<'a> {
         Ok(())
     }
 
-    fn mount_all(&mut self) -> Result<(), ToryggError> {
+    pub fn mount_all(&mut self) -> Result<(), ToryggError> {
         let work_path = config::data_dir().join(".OverlayFS");
         verify_directory(&work_path)?;
 
@@ -110,16 +110,6 @@ impl<'a> AppLauncher<'a> {
         self.mount_path(&appdata_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         Ok(())
-    }
-
-    pub fn run(&mut self) -> Result<(), ToryggError> {
-        self.mount_all()?;
-
-        let result = self.profile.game().run();
-
-        info!("Game stopped");
-
-        result
     }
 
     fn unmount_all(&mut self) -> Result<(), ToryggError> {
