@@ -7,6 +7,13 @@ use crate::error::ToryggError;
 use crate::{config, games};
 use crate::util::verify_directory;
 
+/// Get a vec of all installed mods for the given game
+///
+/// # Errors
+/// Errors when the mod directory cannot be read
+///
+/// # Panics
+/// Panics when a mods name cannot be determined from its path
 pub fn installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: games::Game {
     let mut mods = Vec::new();
     for entry in config::mods_dir(game).read_dir().map_err(ToryggError::IOError)? {
@@ -23,10 +30,18 @@ pub fn installed_mods<G>(game: &G) -> Result<Vec<String>, ToryggError> where G: 
     Ok(mods)
 }
 
+/// Check if a mod exists for the given game
+///
+/// # Errors
+/// Errors when installed mods cannot be retrieved
 pub fn mod_installed<G>(game: &G, mod_name: &str) -> Result<bool, ToryggError> where G: games::Game {
     Ok(installed_mods(game)?.iter().any(|installed| installed == mod_name))
 }
 
+/// Create a new mod with the given name for the given game
+///
+/// # Errors
+/// Errors when a mod of the same name is already installed
 pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where G: games::Game {
     if mod_installed(game, mod_name)? {
         return Err(ToryggError::ModAlreadyExists);
@@ -35,6 +50,19 @@ pub fn create_mod<G>(game: &G, mod_name: &str) -> Result<(), ToryggError> where 
     verify_directory(&config::mods_dir(game).join(mod_name))
 }
 
+/// Install a mod for the given game
+///
+/// # Errors
+///  - The archive path does not exist
+///  - A mod of the same name already exists
+///  - The status of 7z cannot be gotten
+///  - 7z returns unsuccessfully
+///  - The extracted mods directory cannot be read
+///
+/// # Panics
+///  - A temporary directory cannot be created
+///  - Mod directory cannot be created
+///  - Copying from temp to final directory fails
 pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), ToryggError> where G: games::Game {
     if !archive.exists() {
         return Err(ToryggError::Other("Archive does not exist!".to_owned()));
@@ -58,6 +86,9 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
         return Err(ToryggError::Other("Unable to extract archive".to_owned()));
     }
 
+    // TODO: this is broken, some mods that have one directory eg. 'SKSE' it should not be lowered
+    // TODO: maybe only lower if the folder name is 'Data' or the name of the archive
+    // TODO: we may need to handle both eg. 'mod_name/Data/actual_mod_stuff'
     // Detect if mod is contained within a subdirectory
     // and move it if it is
     let mut mod_root = archive_extract_path;
@@ -96,6 +127,11 @@ pub fn install_mod<G>(game: &G, archive: &Path, name: &str) -> Result<(), Torygg
     Ok(())
 }
 
+/// Uninstall a mod for the given game and disables the mod in all profiles
+///
+/// # Errors
+///  - Profiles cannot be gotten
+///  - Removing the files fails
 pub fn uninstall_mod<G>(game: &G, name: &str) -> Result<(), ToryggError> where G: games::Game {
     // TODO: check mod is installed
 

@@ -33,7 +33,7 @@ pub fn data_dir() -> &'static PathBuf {
     })
 }
 
-/// Get the directory in which torygg stores its mods
+/// Get the directory in which torygg stores its mods for a given game
 ///
 /// # Panics
 /// Panics when `data_dir` panics or the directory does not exist and cannot be created
