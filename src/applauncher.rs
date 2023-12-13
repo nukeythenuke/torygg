@@ -2,9 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use log::{error, info};
-use crate::{config, profile::Profile, util::verify_directory};
+use crate::{config, games, profile::Profile, util::verify_directory};
 use crate::error::ToryggError;
-use crate::games::Game;
 
 pub struct AppLauncher<'a> {
     profile: &'a Profile,
@@ -76,7 +75,7 @@ impl<'a> AppLauncher<'a> {
         verify_directory(&work_path)?;
 
         // Mount data
-        let install_path = self.profile.game().install_dir()?;
+        let install_path = games::SKYRIM_SPECIAL_EDITION.install_dir()?;
 
         let data_path = install_path.join("Data");
 
@@ -96,14 +95,14 @@ impl<'a> AppLauncher<'a> {
         self.mount_path(&data_path, &mut mod_paths, &override_path, &work_path)?;
 
         // Mount config
-        let config_path = self.profile.game().config_dir()?;
+        let config_path = games::SKYRIM_SPECIAL_EDITION.config_dir()?;
         let upper_path = config::data_dir().join("Configs");
         verify_directory(&upper_path)?;
 
         self.mount_path(&config_path, &mut Vec::new(), &upper_path, &work_path)?;
 
         // Mount appdata
-        let appdata_path = self.profile.game().appdata_dir()?;
+        let appdata_path = games::SKYRIM_SPECIAL_EDITION.appdata_dir()?;
         let upper_path = config::data_dir().join("Plugins");
         verify_directory(&upper_path)?;
 

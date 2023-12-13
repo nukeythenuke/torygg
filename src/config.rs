@@ -1,7 +1,6 @@
 use crate::util::verify_directory;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use crate::games;
 
 static APP_NAME: &str = "torygg";
 
@@ -37,10 +36,10 @@ pub fn data_dir() -> &'static PathBuf {
 ///
 /// # Panics
 /// Panics when `data_dir` panics or the directory does not exist and cannot be created
-pub fn mods_dir(game: &impl games::Game) -> &'static PathBuf {
+pub fn mods_dir() -> &'static PathBuf {
     static MODS_DIR: OnceLock<PathBuf> = OnceLock::new();
     MODS_DIR.get_or_init(|| {
-        let dir = data_dir().join(game.name()).join("mods");
+        let dir = data_dir().join("mods");
         verify_directory(&dir).expect("Could not create mods directory");
         dir
     })

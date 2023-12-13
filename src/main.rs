@@ -6,7 +6,7 @@ use log::info;
 use simplelog::TermLogger;
 use walkdir::WalkDir;
 
-use torygg::{games, profile::{Profile, profiles}, modmanager};
+use torygg::{profile::{Profile, profiles}, modmanager};
 use torygg::applauncher::AppLauncher;
 
 #[derive(Parser)]
@@ -14,10 +14,6 @@ use torygg::applauncher::AppLauncher;
 struct Cli {
     #[arg(short, long)]
     verbose: bool,
-
-    /// The game to operate on
-    #[arg(long)]
-    game: games::SteamApp,
 
     #[command(subcommand)]
     subcommand: Subcommands
@@ -34,10 +30,6 @@ enum Subcommands {
 
     /// install a mod from an archive
     Install {
-        /// profile to install the mod into
-        #[arg(long)]
-        profile: Profile,
-
         /// mod archive to install
         #[arg(long)]
         archive: PathBuf,
@@ -49,9 +41,6 @@ enum Subcommands {
 
     /// uninstall a mod
     Uninstall {
-        /// profile to uninstall the mod from
-        profile: Profile,
-
         /// name of mod to uninstall
         #[arg(long)]
         name: String,
@@ -81,9 +70,6 @@ enum Subcommands {
 
     /// create a new, empty, mod
     CreateMod {
-        /// profile to create the mod in
-        profile: Profile,
-
         /// name of mod to create
         #[arg(long)]
         name: String,
@@ -138,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
             info!("Listing mods");
-            let mods = modmanager::installed_mods(&cli.game)?;
+            let mods = modmanager::installed_mods()?;
             if mods.is_empty() {
                 println!("No mods.");
                 return Ok(());
@@ -150,14 +136,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             
         },
-        Subcommands::Install { profile, archive, name } => {
+        Subcommands::Install { archive, name } => {
             info!("Installing {} as {name}", archive.display());
-            modmanager::install_mod(profile.game(), archive, name)?;
+            modmanager::install_mod(archive, name)?;
         },
 
-        Subcommands::Uninstall { profile, name } => {
+        Subcommands::Uninstall { name } => {
             info!("Uninstalling {name}");
-            modmanager::uninstall_mod(profile.game(), name)?;
+            modmanager::uninstall_mod(name)?;
         },
 
         Subcommands::Activate { profile, name } => {
@@ -172,23 +158,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             profile.disable_mod(name);
         },
 
-        Subcommands::CreateMod { profile, name } => {
+        Subcommands::CreateMod { name } => {
             info!("Creating new mod with name: {name}");
-            modmanager::create_mod(profile.game(), name)?;
+            modmanager::create_mod(name)?;
         },
 
         Subcommands::ListProfiles => {
             info!("Listing profiles");
             for profile in profiles()? {
-                if *profile.game() == cli.game {
-                    println!("{}", profile.name());
-                }
+                println!("{}", profile.name());
             }
         },
 
         Subcommands::CreateProfile { name } => {
             info!("Creating a profile with name: {name}");
-            Profile::new(name, cli.game)?;
+            Profile::new(name)?;
         },
 
         Subcommands::DeleteProfile { profile } => {

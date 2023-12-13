@@ -4,12 +4,10 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use crate::error::ToryggError;
 use crate::{config, modmanager};
-use crate::games::SteamApp;
 use crate::util::verify_directory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
-    game: SteamApp,
     name: String,
     mods: Option<Vec<String>>,
     plugins: Option<Vec<String>>
@@ -30,14 +28,14 @@ impl std::str::FromStr for Profile {
 }
 
 impl Profile {
-    pub fn new(profile_name: &str, game: SteamApp) -> Result<Profile, ToryggError> {
+    pub fn new(profile_name: &str) -> Result<Profile, ToryggError> {
         let path = config::config_dir().join(profile_name);
         if path.exists() {
             return Err(ToryggError::ProfileAlreadyExists)
         }
 
         verify_directory(&path)?;
-        let profile = Profile { game, name: profile_name.to_string(), mods: None, plugins: None };
+        let profile = Profile { name: profile_name.to_string(), mods: None, plugins: None };
         profile.write()?;
         Ok(profile)
     }
@@ -52,11 +50,6 @@ impl Profile {
             Ok(()) => Ok(()),
             Err(e) => Err(ToryggError::IOError(e))
         }
-    }
-
-    #[must_use]
-    pub  fn game(&self) -> &SteamApp {
-        &self.game
     }
 
     #[must_use]
@@ -76,7 +69,7 @@ impl Profile {
     }
 
     fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) {
-        if !modmanager::mod_installed(&self.game, mod_name).unwrap() {
+        if !modmanager::mod_installed(mod_name).unwrap() {
             return;
         }
 
@@ -136,7 +129,7 @@ impl Profile {
     }
 
     pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {
-        Ok(config::mods_dir(&self.game))
+        Ok(config::mods_dir())
     }
 
     pub fn overwrite_dir(&self) -> Result<PathBuf, ToryggError> {
