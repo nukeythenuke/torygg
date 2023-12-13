@@ -5,6 +5,10 @@ use crate::games;
 
 static APP_NAME: &str = "torygg";
 
+/// Get torygg's config directory
+///
+/// # Panics
+/// Panics when `dirs::config_dir` returns `None` or the directory does not exist and cannot be created
 pub fn config_dir() -> &'static PathBuf {
     static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
     CONFIG_DIR.get_or_init(|| {
@@ -15,6 +19,10 @@ pub fn config_dir() -> &'static PathBuf {
     })
 }
 
+/// Get torygg's data directory
+///
+/// # Panics
+/// Panics when `dirs::data_dir()` returns `None` or the directory does not exist and cannot be created
 pub fn data_dir() -> &'static PathBuf {
     static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
     DATA_DIR.get_or_init(|| {
@@ -25,6 +33,10 @@ pub fn data_dir() -> &'static PathBuf {
     })
 }
 
+/// Get the directory in which torygg stores its mods
+///
+/// # Panics
+/// Panics when `data_dir` panics or the directory does not exist and cannot be created
 pub fn mods_dir(game: &impl games::Game) -> &'static PathBuf {
     static MODS_DIR: OnceLock<PathBuf> = OnceLock::new();
     MODS_DIR.get_or_init(|| {
