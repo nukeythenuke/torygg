@@ -1,13 +1,72 @@
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
 use log::info;
+use serde::{Deserialize, Serialize};
 use simplelog::TermLogger;
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use walkdir::WalkDir;
 
 use torygg::{profile::{Profile, profiles}, modmanager};
 use torygg::applauncher::AppLauncher;
+use torygg::config::{data_dir};
+use torygg::error::ToryggError;
+
+mod serde_profile {
+    use std::fmt::Formatter;
+    use std::str::FromStr;
+    use serde::{de, Deserializer, Serializer};
+    use serde::de::{Visitor};
+    use torygg::profile::{Profile};
+
+    struct ProfileVisitor;
+
+    impl<'de> Visitor<'de> for ProfileVisitor {
+        type Value = Profile;
+
+        fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+            write!(formatter, "name of a profile")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error {
+            Profile::from_str(v).map_err(|_| de::Error::invalid_value(de::Unexpected::Str(v), &self))
+        }
+    }
+
+    pub fn serialize<S>(profile: &Profile, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer  {
+        serializer.serialize_str(profile.name())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Profile, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_str(ProfileVisitor)
+    }
+}
+
+/// Torygg's persistent state
+#[derive(Serialize, Deserialize)]
+struct ToryggState {
+    //game: &'static SteamApp,
+    #[serde(with = "serde_profile")]
+    profile: Profile
+}
+
+impl ToryggState {
+    // fn game(&self) -> &'static SteamApp {
+    //     self.game
+    // }
+
+    fn profile(&self) -> &Profile {
+        &self.profile
+    }
+
+    fn set_profile(&mut self, name: &str) -> Result<(), ToryggError> {
+        self.profile = Profile::from_str(name).map_err(|_| ToryggError::Other("failed to find profile".to_owned()))?;
+        Ok(())
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -77,6 +136,10 @@ enum Subcommands {
 
     ListProfiles,
 
+    SetProfile {
+      name: String
+    },
+
     /// create a new profile
     CreateProfile {
         /// name of the profile to create
@@ -92,18 +155,10 @@ enum Subcommands {
     },
 
     /// view the contents of the overwrite directory
-    Overwrite {
-        /// profile which to show the overwrite directory of
-        #[arg(long)]
-        profile: Profile,
-    },
+    Overwrite,
 
     /// mount the modded directories, use ctrl-c to unmount
-    Mount {
-        /// profile to mount
-        #[arg(long)]
-        profile: Profile,
-    },
+    Mount,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -120,6 +175,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         simplelog::ColorChoice::Auto,
     )
     .unwrap();
+
+    {
+        let profiles = profiles().unwrap();
+        if profiles.is_empty() {
+            Profile::new("default").unwrap();
+        }
+    }
+
+    let state_path = data_dir().join(".toryggstate.toml");
+
+    let mut state = {
+        if let Ok(s) = fs::read_to_string(&state_path) {
+            toml::from_str(&s).unwrap()
+        } else {
+            ToryggState { profile: profiles().unwrap().first().unwrap().clone() }
+        }
+    };
 
     match &cli.subcommand {
         Subcommands::ListMods { profile } => {
@@ -165,10 +237,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Subcommands::ListProfiles => {
             info!("Listing profiles");
+            let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
             for profile in profiles()? {
-                println!("{}", profile.name());
+                if profile.name() == state.profile().name() {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
+                }
+
+                writeln!(&mut stdout, "{}", profile.name()).unwrap();
+                stdout.reset().unwrap();
             }
         },
+
+        Subcommands::SetProfile { name } => {
+            info!("Setting profile");
+            if state.set_profile(name).is_err() {
+                println!("failed to set profile: {name}");
+            }
+
+            fs::write(&state_path, toml::to_string(&state).unwrap()).unwrap();
+        }
 
         Subcommands::CreateProfile { name } => {
             info!("Creating a profile with name: {name}");
@@ -181,16 +268,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::remove_dir_all(dir)?;
         }
 
-        Subcommands::Overwrite { profile } => {
+        Subcommands::Overwrite => {
             info!("Listing overwrite directory contents");
-            for e in WalkDir::new(profile.overwrite_dir()?).min_depth(1) {
+            for e in WalkDir::new(state.profile().overwrite_dir()?).min_depth(1) {
                 println!("{}", e?.path().display());
             }
         },
 
-        Subcommands::Mount {profile } => {
+        Subcommands::Mount => {
             info!("Mounting modded directories");
-            let mut launcher = AppLauncher::new(profile);
+            let mut launcher = AppLauncher::new(state.profile());
             launcher.mount_all()?;
         },
     }
