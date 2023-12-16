@@ -194,12 +194,6 @@ enum Subcommands {
         #[arg(long)]
         profile: Profile,
     },
-
-    /// view the contents of the overwrite directory
-    Overwrite,
-
-    /// mount the modded directories, use ctrl-c to unmount
-    Mount,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -288,19 +282,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let dir = profile.dir()?;
             fs::remove_dir_all(dir)?;
         }
-
-        Some(Subcommands::Overwrite) => {
-            info!("Listing overwrite directory contents");
-            for e in WalkDir::new(state.profile().overwrite_dir()?).min_depth(1) {
-                println!("{}", e?.path().display());
-            }
-        },
-
-        Some(Subcommands::Mount) => {
-            info!("Mounting modded directories");
-            let mut launcher = AppLauncher::new(state.profile());
-            launcher.mount_all()?;
-        },
 
         None => {
             print_header("Profiles");
