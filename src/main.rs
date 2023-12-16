@@ -56,6 +56,12 @@ impl ToryggState {
     //     self.game
     // }
 
+    fn new() -> ToryggState {
+        let state = ToryggState { profile: profiles().unwrap().first().unwrap().clone() };
+        state.write().unwrap();
+        state
+    }
+
     fn profile(&self) -> &Profile {
         &self.profile
     }
@@ -66,7 +72,25 @@ impl ToryggState {
 
     fn set_profile(&mut self, name: &str) -> Result<(), ToryggError> {
         self.profile = Profile::from_str(name).map_err(|_| ToryggError::Other("failed to find profile".to_owned()))?;
+        self.write()?;
         Ok(())
+    }
+
+    fn path() -> PathBuf {
+        data_dir().join(".toryggstate.toml")
+    }
+
+    fn read() -> Result<ToryggState, ToryggError> {
+        let s = fs::read_to_string(Self::path())?;
+        toml::from_str(&s).map_err(|_| ToryggError::Other("Failed to parse state toml".to_owned()))
+    }
+
+    fn write(&self) -> Result<(), std::io::Error> {
+        fs::write(Self::path(), toml::to_string(self).unwrap())
+    }
+
+    fn read_or_new() -> ToryggState {
+        ToryggState::read().unwrap_or_else(|_| ToryggState::new())
     }
 }
 
@@ -181,7 +205,6 @@ enum Subcommands {
     /// create a new profile
     CreateProfile {
         /// name of the profile to create
-        #[arg(long)]
         name: String,
     },
 
@@ -207,29 +230,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
 
-    {
-        let profiles = profiles().unwrap();
-        if profiles.is_empty() {
-            Profile::new("Default").unwrap();
-        }
-    }
-
-    let state_path = data_dir().join(".toryggstate.toml");
-
-    let mut state = {
-        if let Ok(s) = fs::read_to_string(&state_path) {
-            toml::from_str(&s).unwrap_or_else(|_| ToryggState { profile: profiles().unwrap().first().unwrap().clone() })
-        } else {
-            ToryggState { profile: profiles().unwrap().first().unwrap().clone() }
-        }
-    };
+    let mut state = ToryggState::read_or_new();
 
     match cli.subcommand {
         Some(Subcommands::ListMods) => {
             list_mods(&state)?;
         },
-        Some(Subcommands::Install { archive, mut name }) => {
-            let name = name.take().unwrap_or_else(|| {
+        Some(Subcommands::Install { archive, name }) => {
+            let name = name.unwrap_or_else(|| {
                 let default_name = archive.file_stem().unwrap().to_string_lossy().to_string();
                 println!("Name for mod: (default: {default_name})");
                 let mut name = String::new();
@@ -276,8 +284,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if state.set_profile(&name).is_err() {
                 println!("failed to set profile: {name}");
             }
-
-            fs::write(&state_path, toml::to_string(&state).unwrap()).unwrap();
         }
 
         Some(Subcommands::CreateProfile { name }) => {
@@ -289,6 +295,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Deleting profile with name: {}", profile.name());
             let dir = profile.dir()?;
             fs::remove_dir_all(dir)?;
+
+            if profile == state.profile {
+                ToryggState::new();
+            }
         }
 
         None => {

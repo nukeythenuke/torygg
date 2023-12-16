@@ -6,7 +6,7 @@ use crate::error::ToryggError;
 use crate::{config, modmanager};
 use crate::util::verify_directory;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Profile {
     name: String,
     mods: Option<Vec<String>>,
@@ -142,7 +142,7 @@ impl Profile {
 }
 
 pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
-    Ok(fs::read_dir(config::config_dir())?
+    let profs = fs::read_dir(config::config_dir())?
         .filter_map(|e| Some(e.ok()?.path()))
         .filter_map(|e| {
             if e.is_dir() {
@@ -151,5 +151,12 @@ pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
                 None
             }
         })
-        .collect())
+        .collect::<Vec<_>>();
+
+    if profs.is_empty() {
+        Profile::new("Default").unwrap();
+        return profiles()
+    }
+
+    Ok(profs)
 }
