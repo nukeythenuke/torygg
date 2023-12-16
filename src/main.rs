@@ -68,6 +68,59 @@ impl ToryggState {
     }
 }
 
+fn list_profiles(state: &ToryggState) -> Result<(), ToryggError> {
+    let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
+    for profile in profiles()? {
+        if profile.name() == state.profile().name() {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
+        }
+
+        writeln!(&mut stdout, "{}", profile.name()).unwrap();
+        stdout.reset().unwrap();
+    }
+
+    Ok(())
+}
+
+fn list_mods(state: &ToryggState) -> Result<(), ToryggError> {
+    let mods = modmanager::installed_mods()?;
+    if mods.is_empty() {
+        println!("No mods.");
+        return Ok(());
+    };
+
+    let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
+    let mut active_color = ColorSpec::new();
+    active_color.set_fg(Some(Color::Green));
+
+    let mut inactive_color = ColorSpec::new();
+    inactive_color.set_fg(Some(Color::Red));
+
+    for m in &mods {
+        if state.profile().mod_enabled(m) {
+            stdout.set_color(&active_color).unwrap();
+        } else {
+            stdout.set_color(&inactive_color).unwrap();
+        }
+
+        println!("{m}");
+    }
+
+    Ok(())
+}
+
+fn print_header(header: &str) {
+    let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
+
+    let mut header_spec = ColorSpec::new();
+    header_spec.set_bold(true);
+    header_spec.set_underline(true);
+
+    stdout.set_color(&header_spec).unwrap();
+    println!("{header}:");
+    stdout.reset().unwrap();
+}
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -75,7 +128,7 @@ struct Cli {
     verbose: bool,
 
     #[command(subcommand)]
-    subcommand: Subcommands
+    subcommand: Option<Subcommands>
 }
 
 #[derive(Subcommand)]
@@ -182,61 +235,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match &cli.subcommand {
-        Subcommands::ListMods => {
-            info!("Listing mods");
-            let mods = modmanager::installed_mods()?;
-            if mods.is_empty() {
-                println!("No mods.");
-                return Ok(());
-            };
-
-            println!("Mods");
-            for m in mods {
-                println!("{}{}", if state.profile().mod_enabled(&m) { "*" } else { "" }, m);
-            }
-            
+        Some(Subcommands::ListMods) => {
+            list_mods(&state)?;
         },
-        Subcommands::Install { archive, name } => {
+        Some(Subcommands::Install { archive, name }) => {
             info!("Installing {} as {name}", archive.display());
             modmanager::install_mod(archive, name)?;
         },
 
-        Subcommands::Uninstall { name } => {
+        Some(Subcommands::Uninstall { name }) => {
             info!("Uninstalling {name}");
             modmanager::uninstall_mod(name)?;
         },
 
-        Subcommands::Activate { name } => {
+        Some(Subcommands::Activate { name }) => {
             info!("Activating {name}");
             let mut profile = state.profile().clone();
             profile.enable_mod(name);
         },
 
-        Subcommands::Deactivate { name } => {
+        Some(Subcommands::Deactivate { name }) => {
             info!("Deactivating {name}");
             let mut profile = state.profile().clone();
             profile.disable_mod(name);
         },
 
-        Subcommands::CreateMod { name } => {
+        Some(Subcommands::CreateMod { name }) => {
             info!("Creating new mod with name: {name}");
             modmanager::create_mod(name)?;
         },
 
-        Subcommands::ListProfiles => {
-            info!("Listing profiles");
-            let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
-            for profile in profiles()? {
-                if profile.name() == state.profile().name() {
-                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
-                }
-
-                writeln!(&mut stdout, "{}", profile.name()).unwrap();
-                stdout.reset().unwrap();
-            }
+        Some(Subcommands::ListProfiles) => {
+            list_profiles(&state)?;
         },
 
-        Subcommands::SetProfile { name } => {
+        Some(Subcommands::SetProfile { name }) => {
             info!("Setting profile");
             if state.set_profile(name).is_err() {
                 println!("failed to set profile: {name}");
@@ -245,29 +278,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::write(&state_path, toml::to_string(&state).unwrap()).unwrap();
         }
 
-        Subcommands::CreateProfile { name } => {
+        Some(Subcommands::CreateProfile { name }) => {
             info!("Creating a profile with name: {name}");
             Profile::new(name)?;
         },
 
-        Subcommands::DeleteProfile { profile } => {
+        Some(Subcommands::DeleteProfile { profile }) => {
             info!("Deleting profile with name: {}", profile.name());
             let dir = profile.dir()?;
             fs::remove_dir_all(dir)?;
         }
 
-        Subcommands::Overwrite => {
+        Some(Subcommands::Overwrite) => {
             info!("Listing overwrite directory contents");
             for e in WalkDir::new(state.profile().overwrite_dir()?).min_depth(1) {
                 println!("{}", e?.path().display());
             }
         },
 
-        Subcommands::Mount => {
+        Some(Subcommands::Mount) => {
             info!("Mounting modded directories");
             let mut launcher = AppLauncher::new(state.profile());
             launcher.mount_all()?;
         },
+
+        None => {
+            print_header("Profiles");
+            list_profiles(&state)?;
+            println!();
+            print_header("Mods");
+            list_mods(&state)?;
+        }
     }
 
     Ok(())
