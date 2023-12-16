@@ -60,6 +60,10 @@ impl ToryggState {
         &self.profile
     }
 
+    fn profile_mut(&mut self) -> &mut Profile {
+        &mut self.profile
+    }
+
     fn set_profile(&mut self, name: &str) -> Result<(), ToryggError> {
         self.profile = Profile::from_str(name).map_err(|_| ToryggError::Other("failed to find profile".to_owned()))?;
         Ok(())
@@ -146,21 +150,18 @@ enum Subcommands {
     /// uninstall a mod
     Uninstall {
         /// name of mod to uninstall
-        #[arg(long)]
         name: String,
     },
 
     /// activate a mod
     Activate {
         /// name of mod to activate
-        #[arg(long)]
         name: String,
     },
 
     /// deactivate a mod
     Deactivate {
         /// name of mod to deactivate
-        #[arg(long)]
         name: String,
     },
 
@@ -233,6 +234,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Name for mod: (default: {default_name})");
                 let mut name = String::new();
                 stdin().read_line(&mut name).unwrap();
+                let name = name.trim().to_owned();
+
                 if name.is_empty() {
                     default_name
                 } else {
@@ -251,14 +254,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Some(Subcommands::Activate { name }) => {
             info!("Activating {name}");
-            let mut profile = state.profile().clone();
-            profile.enable_mod(&name);
+            state.profile_mut().enable_mod(&name)?;
         },
 
         Some(Subcommands::Deactivate { name }) => {
             info!("Deactivating {name}");
-            let mut profile = state.profile().clone();
-            profile.disable_mod(&name);
+            state.profile_mut().disable_mod(&name)?;
         },
 
         Some(Subcommands::CreateMod { name }) => {

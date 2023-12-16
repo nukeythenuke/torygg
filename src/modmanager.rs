@@ -34,15 +34,15 @@ pub fn installed_mods() -> Result<Vec<String>, ToryggError>  {
 ///
 /// # Errors
 /// Errors when installed mods cannot be retrieved
-pub fn mod_installed(mod_name: &str) -> Result<bool, ToryggError> {
-    Ok(installed_mods()?.iter().any(|installed| installed == mod_name))
+pub fn mod_installed(mod_name: &String) -> Result<bool, ToryggError> {
+    Ok(installed_mods()?.contains(mod_name))
 }
 
 /// Create a new mod with the given name for the given game
 ///
 /// # Errors
 /// Errors when a mod of the same name is already installed
-pub fn create_mod(mod_name: &str) -> Result<(), ToryggError> {
+pub fn create_mod(mod_name: &String) -> Result<(), ToryggError> {
     if mod_installed(mod_name)? {
         return Err(ToryggError::ModAlreadyExists);
     }
@@ -63,7 +63,7 @@ pub fn create_mod(mod_name: &str) -> Result<(), ToryggError> {
 ///  - A temporary directory cannot be created
 ///  - Mod directory cannot be created
 ///  - Copying from temp to final directory fails
-pub fn install_mod(archive: &Path, name: &str) -> Result<(), ToryggError> {
+pub fn install_mod(archive: &Path, name: &String) -> Result<(), ToryggError> {
     if !archive.exists() {
         return Err(ToryggError::Other("Archive does not exist!".to_owned()));
     }
@@ -132,11 +132,11 @@ pub fn install_mod(archive: &Path, name: &str) -> Result<(), ToryggError> {
 /// # Errors
 ///  - Profiles cannot be gotten
 ///  - Removing the files fails
-pub fn uninstall_mod(name: &str) -> Result<(), ToryggError> {
+pub fn uninstall_mod(name: &String) -> Result<(), ToryggError> {
     // TODO: check mod is installed
 
     for mut profile in crate::profile::profiles()? {
-        profile.disable_mod(name);
+        profile.disable_mod(name)?;
     }
 
     let mod_dir = config::mods_dir().join(name);

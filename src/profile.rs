@@ -68,9 +68,9 @@ impl Profile {
         }
     }
 
-    fn set_mod_enabled(&mut self, mod_name: &str, enabled: bool) {
-        if !modmanager::mod_installed(mod_name).unwrap() {
-            return;
+    fn set_mod_enabled(&mut self, mod_name: &String, enabled: bool) -> Result<(), ToryggError> {
+        if !modmanager::mod_installed(mod_name)? {
+            return Err(ToryggError::Other(String::from("Mod not installed")));
         }
 
         if self.mods.is_none() {
@@ -81,26 +81,28 @@ impl Profile {
         let mods = self.mods.as_mut().unwrap();
 
         if enabled {
-            if !mods.contains(&mod_name.to_owned()) {
+            if !mods.contains(mod_name) {
                 mods.push(mod_name.to_owned());
-                self.write().unwrap();
+                self.write()?;
             }
-        } else if mods.contains(&mod_name.to_owned()) {
+        } else if mods.contains(mod_name) {
             *mods = mods.clone().into_iter().filter(|name| name != mod_name).collect();
             if mods.is_empty() {
                 self.mods = None;
             }
 
-            self.write().unwrap();
+            self.write()?;
         }
+
+        Ok(())
     }
 
-    pub fn enable_mod(&mut self, mod_name: &str) {
-        self.set_mod_enabled(mod_name, true);
+    pub fn enable_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
+        self.set_mod_enabled(mod_name, true)
     }
 
-    pub fn disable_mod(&mut self, mod_name: &str) {
-        self.set_mod_enabled(mod_name, false);
+    pub fn disable_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
+        self.set_mod_enabled(mod_name, false)
     }
 
     #[must_use]
