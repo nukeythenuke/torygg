@@ -10,7 +10,6 @@ use crate::util::verify_directory;
 pub struct Profile {
     name: String,
     mods: Option<Vec<String>>,
-    plugins: Option<Vec<String>>
 }
 
 impl std::str::FromStr for Profile {
@@ -35,7 +34,7 @@ impl Profile {
         }
 
         verify_directory(&path)?;
-        let profile = Profile { name: profile_name.to_string(), mods: None, plugins: None };
+        let profile = Profile { name: profile_name.to_string(), mods: None };
         profile.write()?;
         Ok(profile)
     }
@@ -114,8 +113,8 @@ impl Profile {
     }
 
     #[must_use]
-    pub fn enabled_mods(&self) -> &Option<Vec<String>> {
-        &self.mods
+    pub fn enabled_mods(&self) -> Option<&Vec<String>> {
+        self.mods.as_ref()
     }
 
     pub fn dir(&self) -> Result<PathBuf, ToryggError> {

@@ -196,6 +196,8 @@ enum Subcommands {
         name: String,
     },
 
+    LoadOrder,
+
     ListProfiles,
 
     SetProfile {
@@ -274,6 +276,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Creating new mod with name: {name}");
             modmanager::create_mod(&name)?;
         },
+
+        Some(Subcommands::LoadOrder) => {
+            print_header("Files");
+            if let Some(mods) = state.profile.enabled_mods() {
+                for (i, m) in mods.iter().enumerate() {
+                    println!("{}. {m}", i + 1);
+                }
+            } else {
+                println!("No mods");
+            }
+        }
 
         Some(Subcommands::ListProfiles) => {
             list_profiles(&state)?;
