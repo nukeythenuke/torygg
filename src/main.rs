@@ -81,11 +81,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Subcommands {
     /// list installed / active mods
-    ListMods {
-        /// profile to show active mods from
-        #[arg(long)]
-        profile: Profile,
-    },
+    ListMods,
 
     /// install a mod from an archive
     Install {
@@ -107,10 +103,6 @@ enum Subcommands {
 
     /// activate a mod
     Activate {
-        /// profile to activate the mod on
-        #[arg(long)]
-        profile: Profile,
-
         /// name of mod to activate
         #[arg(long)]
         name: String,
@@ -118,10 +110,6 @@ enum Subcommands {
 
     /// deactivate a mod
     Deactivate {
-        /// profile to deactivate the mod on
-        #[arg(long)]
-        profile: Profile,
-
         /// name of mod to deactivate
         #[arg(long)]
         name: String,
@@ -194,7 +182,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match &cli.subcommand {
-        Subcommands::ListMods { profile } => {
+        Subcommands::ListMods => {
             info!("Listing mods");
             let mods = modmanager::installed_mods()?;
             if mods.is_empty() {
@@ -204,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Mods");
             for m in mods {
-                println!("{}{}", if profile.mod_enabled(&m) { "*" } else { "" }, m);
+                println!("{}{}", if state.profile().mod_enabled(&m) { "*" } else { "" }, m);
             }
             
         },
@@ -218,15 +206,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             modmanager::uninstall_mod(name)?;
         },
 
-        Subcommands::Activate { profile, name } => {
+        Subcommands::Activate { name } => {
             info!("Activating {name}");
-            let mut profile = profile.clone();
+            let mut profile = state.profile().clone();
             profile.enable_mod(name);
         },
 
-        Subcommands::Deactivate { profile, name } => {
+        Subcommands::Deactivate { name } => {
             info!("Deactivating {name}");
-            let mut profile = profile.clone();
+            let mut profile = state.profile().clone();
             profile.disable_mod(name);
         },
 
