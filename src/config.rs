@@ -39,7 +39,7 @@ pub fn data_dir() -> &'static PathBuf {
 pub fn mods_dir() -> &'static PathBuf {
     static MODS_DIR: OnceLock<PathBuf> = OnceLock::new();
     MODS_DIR.get_or_init(|| {
-        let dir = data_dir().join("mods");
+        let dir = data_dir().join("Mods");
         verify_directory(&dir).expect("Could not create mods directory");
         dir
     })
