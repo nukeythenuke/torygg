@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{stdin, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -8,10 +8,8 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use simplelog::TermLogger;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use walkdir::WalkDir;
 
 use torygg::{profile::{Profile, profiles}, modmanager};
-use torygg::applauncher::AppLauncher;
 use torygg::config::{data_dir};
 use torygg::error::ToryggError;
 
@@ -139,12 +137,10 @@ enum Subcommands {
     /// install a mod from an archive
     Install {
         /// mod archive to install
-        #[arg(long)]
         archive: PathBuf,
 
         /// the name of the installed mod
-        #[arg(long)]
-        name: String,
+        name: Option<String>,
     },
 
     /// uninstall a mod
@@ -191,7 +187,6 @@ enum Subcommands {
     /// delete a profile
     DeleteProfile {
         /// profile to delete
-        #[arg(long)]
         profile: Profile,
     },
 }
@@ -214,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let profiles = profiles().unwrap();
         if profiles.is_empty() {
-            Profile::new("default").unwrap();
+            Profile::new("Default").unwrap();
         }
     }
 
@@ -222,41 +217,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = {
         if let Ok(s) = fs::read_to_string(&state_path) {
-            toml::from_str(&s).unwrap()
+            toml::from_str(&s).unwrap_or_else(|_| ToryggState { profile: profiles().unwrap().first().unwrap().clone() })
         } else {
             ToryggState { profile: profiles().unwrap().first().unwrap().clone() }
         }
     };
 
-    match &cli.subcommand {
+    match cli.subcommand {
         Some(Subcommands::ListMods) => {
             list_mods(&state)?;
         },
-        Some(Subcommands::Install { archive, name }) => {
+        Some(Subcommands::Install { archive, mut name }) => {
+            let name = name.take().unwrap_or_else(|| {
+                let default_name = archive.file_stem().unwrap().to_string_lossy().to_string();
+                println!("Name for mod: (default: {default_name})");
+                let mut name = String::new();
+                stdin().read_line(&mut name).unwrap();
+                if name.is_empty() {
+                    default_name
+                } else {
+                    name
+                }
+            });
+
             info!("Installing {} as {name}", archive.display());
-            modmanager::install_mod(archive, name)?;
+            modmanager::install_mod(&archive, &name)?;
         },
 
         Some(Subcommands::Uninstall { name }) => {
             info!("Uninstalling {name}");
-            modmanager::uninstall_mod(name)?;
+            modmanager::uninstall_mod(&name)?;
         },
 
         Some(Subcommands::Activate { name }) => {
             info!("Activating {name}");
             let mut profile = state.profile().clone();
-            profile.enable_mod(name);
+            profile.enable_mod(&name);
         },
 
         Some(Subcommands::Deactivate { name }) => {
             info!("Deactivating {name}");
             let mut profile = state.profile().clone();
-            profile.disable_mod(name);
+            profile.disable_mod(&name);
         },
 
         Some(Subcommands::CreateMod { name }) => {
             info!("Creating new mod with name: {name}");
-            modmanager::create_mod(name)?;
+            modmanager::create_mod(&name)?;
         },
 
         Some(Subcommands::ListProfiles) => {
@@ -265,7 +272,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Some(Subcommands::SetProfile { name }) => {
             info!("Setting profile");
-            if state.set_profile(name).is_err() {
+            if state.set_profile(&name).is_err() {
                 println!("failed to set profile: {name}");
             }
 
@@ -274,7 +281,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Some(Subcommands::CreateProfile { name }) => {
             info!("Creating a profile with name: {name}");
-            Profile::new(name)?;
+            Profile::new(&name)?;
         },
 
         Some(Subcommands::DeleteProfile { profile }) => {
