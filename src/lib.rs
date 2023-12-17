@@ -1,7 +1,10 @@
-pub mod config;
-pub mod games;
-pub mod error;
-pub mod profile;
-pub mod util;
-pub mod modmanager;
-pub mod state;
+mod config;
+mod games;
+mod error;
+pub use error::ToryggError as Error;
+mod profile;
+pub use profile::Profile;
+mod util;
+mod modmanager;
+mod state;
+pub use state::ToryggState as Torygg;

@@ -1,4 +1,3 @@
-use std::fs;
 use std::io::{stdin, Write};
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -6,12 +5,12 @@ use log::info;
 use simplelog::TermLogger;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 
-use torygg::{profile::{Profile, profiles}, modmanager, state::ToryggState};
-use torygg::error::ToryggError;
+use torygg::Torygg;
+use torygg::Profile;
 
-fn list_profiles(state: &ToryggState) -> Result<(), ToryggError> {
+fn list_profiles(state: &Torygg) -> Result<(), torygg::Error> {
     let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
-    for profile in profiles()? {
+    for profile in Torygg::profiles()? {
         if profile.name() == state.profile().name() {
             stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
         }
@@ -23,8 +22,8 @@ fn list_profiles(state: &ToryggState) -> Result<(), ToryggError> {
     Ok(())
 }
 
-fn list_mods(state: &ToryggState) -> Result<(), ToryggError> {
-    let mods = modmanager::installed_mods()?;
+fn list_mods(state: &Torygg) -> Result<(), torygg::Error> {
+    let mods = Torygg::mods()?;
     if mods.is_empty() {
         println!("No mods.");
         return Ok(());
@@ -38,7 +37,7 @@ fn list_mods(state: &ToryggState) -> Result<(), ToryggError> {
     inactive_color.set_fg(Some(Color::Red));
 
     for m in &mods {
-        if state.profile().mod_enabled(m) {
+        if state.mod_active(m) {
             stdout.set_color(&active_color).unwrap();
         } else {
             stdout.set_color(&inactive_color).unwrap();
@@ -48,6 +47,16 @@ fn list_mods(state: &ToryggState) -> Result<(), ToryggError> {
     }
 
     Ok(())
+}
+
+fn print_load_order(state: &Torygg) {
+    if let Some(mods) = state.active_mods() {
+        for (i, m) in mods.iter().enumerate() {
+            println!("{}. {m}", i + 1);
+        }
+    } else {
+        println!("No mods");
+    }
 }
 
 fn print_header(header: &str) {
@@ -116,7 +125,7 @@ enum Subcommands {
     ListProfiles,
 
     SetProfile {
-      name: String
+      profile: Profile
     },
 
     /// create a new profile
@@ -151,12 +160,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
 
-    let mut state = ToryggState::read_or_new();
+    let mut state = Torygg::read_or_new();
 
     match cli.subcommand {
-        Some(Subcommands::ListMods) => {
-            list_mods(&state)?;
-        },
+        Some(Subcommands::ListMods) => list_mods(&state)?,
         Some(Subcommands::Install { archive, name }) => {
             let name = name.unwrap_or_else(|| {
                 let default_name = archive.file_stem().unwrap().to_string_lossy().to_string();
@@ -173,74 +180,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             info!("Installing {} as {name}", archive.display());
-            modmanager::install_mod(&archive, &name)?;
+            Torygg::install_mod(&archive, &name)?;
         },
 
-        Some(Subcommands::Uninstall { name }) => {
-            info!("Uninstalling {name}");
-            modmanager::uninstall_mod(&name)?;
-        },
-
-        Some(Subcommands::Activate { name }) => {
-            info!("Activating {name}");
-            state.profile_mut().enable_mod(&name)?;
-        },
-
-        Some(Subcommands::Deactivate { name }) => {
-            info!("Deactivating {name}");
-            state.profile_mut().disable_mod(&name)?;
-        },
-
-        Some(Subcommands::CreateMod { name }) => {
-            info!("Creating new mod with name: {name}");
-            modmanager::create_mod(&name)?;
-        },
-
-        Some(Subcommands::LoadOrder) => {
-            print_header("Files");
-            if let Some(mods) = state.profile().enabled_mods() {
-                for (i, m) in mods.iter().enumerate() {
-                    println!("{}. {m}", i + 1);
-                }
-            } else {
-                println!("No mods");
-            }
-        }
-
-        Some(Subcommands::ListProfiles) => {
-            list_profiles(&state)?;
-        },
-
-        Some(Subcommands::SetProfile { name }) => {
-            info!("Setting profile");
-            if state.set_profile(&name).is_err() {
-                println!("failed to set profile: {name}");
-            }
-        }
-
-        Some(Subcommands::CreateProfile { name }) => {
-            info!("Creating a profile with name: {name}");
-            Profile::new(&name)?;
-        },
-
-        Some(Subcommands::DeleteProfile { profile }) => {
-            info!("Deleting profile with name: {}", profile.name());
-            let dir = profile.dir()?;
-            fs::remove_dir_all(dir)?;
-
-            if profile == *state.profile() {
-                let _state = ToryggState::new();
-            }
-        }
-
-        Some(Subcommands::Deploy) => {
-            state.deploy()?;
-        }
-
-        Some(Subcommands::Undeploy) => {
-            state.undeploy()?;
-        }
-
+        Some(Subcommands::Uninstall { name }) => Torygg::uninstall_mod(&name)?,
+        Some(Subcommands::Activate { name }) => state.activate_mod(&name)?,
+        Some(Subcommands::Deactivate { name }) => state.deactivate_mod(&name)?,
+        Some(Subcommands::CreateMod { name }) => Torygg::create_mod(&name)?,
+        Some(Subcommands::LoadOrder) => print_load_order(&state),
+        Some(Subcommands::ListProfiles) => list_profiles(&state)?,
+        Some(Subcommands::SetProfile { profile }) => state.set_profile(profile)?,
+        Some(Subcommands::CreateProfile { name }) => { let _ = Torygg::create_profile(&name)?; },
+        Some(Subcommands::DeleteProfile { profile }) => state.delete_profile(&profile)?,
+        Some(Subcommands::Deploy) => state.deploy()?,
+        Some(Subcommands::Undeploy) => state.undeploy()?,
         None => {
             print_header("Profiles");
             list_profiles(&state)?;

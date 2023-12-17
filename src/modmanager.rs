@@ -4,7 +4,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
-use crate::config;
+use crate::{config, Torygg};
 use crate::util::verify_directory;
 
 /// Get a vec of all installed mods for the given game
@@ -135,8 +135,8 @@ pub fn install_mod(archive: &Path, name: &String) -> Result<(), ToryggError> {
 pub fn uninstall_mod(name: &String) -> Result<(), ToryggError> {
     // TODO: check mod is installed
 
-    for mut profile in crate::profile::profiles()? {
-        profile.disable_mod(name)?;
+    for mut profile in Torygg::profiles()? {
+        profile.deactivate_mod(name)?;
     }
 
     let mod_dir = config::mods_dir().join(name);

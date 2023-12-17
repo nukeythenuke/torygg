@@ -10,6 +10,12 @@ pub enum ToryggError {
     #[error("profile already exists")]
     ProfileAlreadyExists,
 
+    #[error("torygg is currently deployed")]
+    IsDeployed,
+
+    #[error("torygg is not currently deployed")]
+    IsNotDeployed,
+
     #[error("failed to spawn child")]
     FailedToSpawnChild,
 

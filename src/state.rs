@@ -1,14 +1,13 @@
 use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::path::{Path, PathBuf};
 use log::info;
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
-use crate::config;
+use crate::{config, modmanager};
 use crate::config::data_dir;
 use crate::error::ToryggError;
 use crate::games::SKYRIM_SPECIAL_EDITION;
-use crate::profile::{Profile, profiles};
+use crate::profile::Profile;
 use crate::util::{find_case_insensitive_path, verify_directory};
 
 mod serde_profile {
@@ -47,7 +46,7 @@ pub struct ToryggState {
     //game: &'static SteamApp,
     #[serde(with = "serde_profile")]
     profile: Profile,
-    deployed: Option<Vec<PathBuf>>
+    deployed_files: Option<Vec<PathBuf>>
 }
 
 impl Default for ToryggState {
@@ -64,24 +63,117 @@ impl ToryggState {
     #[must_use]
     pub fn new() -> ToryggState {
         let state = ToryggState {
-            profile: profiles().unwrap().first().unwrap().clone(),
-            deployed: None
+            profile: Self::default_profile(),
+            deployed_files: None
         };
         state.write().unwrap();
         state
     }
 
+    fn default_profile() -> Profile {
+        Self::profiles().unwrap().first().unwrap().clone()
+    }
+
+    fn deployed(&self) -> bool {
+        self.deployed_files.is_some()
+    }
+
+    pub fn mods() -> Result<Vec<String>, ToryggError> {
+        modmanager::installed_mods()
+    }
+
+    pub fn install_mod(archive: &Path, name: &String) -> Result<(), ToryggError> {
+        modmanager::install_mod(archive, name)
+    }
+
+    pub fn uninstall_mod(name: &String) -> Result<(), ToryggError> {
+        modmanager::uninstall_mod(name)
+    }
+
+    pub fn create_mod(mod_name: &String) -> Result<(), ToryggError> {
+        modmanager::create_mod(mod_name)
+    }
+
+    #[must_use]
+    pub fn active_mods(&self) -> Option<&Vec<String>> {
+        self.profile.enabled_mods()
+    }
+
+    #[must_use]
+    pub fn mod_active(&self, mod_name: &String) -> bool {
+        self.profile().mod_enabled(mod_name)
+    }
+
+    pub fn activate_mod(&mut self, name: &String) -> Result<(), ToryggError> {
+        if self.deployed() {
+            return Err(ToryggError::IsDeployed)
+        }
+
+        self.profile.activate_mod(name)
+    }
+
+    pub fn deactivate_mod(&mut self, name: &String) -> Result<(), ToryggError> {
+        if self.deployed() {
+            return Err(ToryggError::IsDeployed)
+        }
+
+        self.profile.deactivate_mod(name)
+    }
+
+    pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
+        let profs = fs::read_dir(config::config_dir())?
+            .filter_map(|e| Some(e.ok()?.path()))
+            .filter_map(|e| {
+                if e.is_dir() {
+                    Profile::from_dir(&e).ok()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if profs.is_empty() {
+            Profile::new("Default").unwrap();
+            return Self::profiles()
+        }
+
+        Ok(profs)
+    }
+
+    #[must_use]
     pub fn profile(&self) -> &Profile {
         &self.profile
     }
 
-    pub fn profile_mut(&mut self) -> &mut Profile {
+    fn profile_mut(&mut self) -> &mut Profile {
         &mut self.profile
     }
 
-    pub fn set_profile(&mut self, name: &str) -> Result<(), ToryggError> {
-        self.profile = Profile::from_str(name).map_err(|_| ToryggError::Other("failed to find profile".to_owned()))?;
+    pub fn set_profile(&mut self, profile: Profile) -> Result<(), ToryggError> {
+        if self.deployed() {
+            return Err(ToryggError::IsDeployed)
+        }
+
+        self.profile = profile;
         self.write()?;
+        Ok(())
+    }
+
+    pub fn create_profile(name: &str) -> Result<Profile, ToryggError> {
+        Profile::new(name)
+    }
+
+    pub fn delete_profile(&mut self, profile: &Profile) -> Result<(), ToryggError> {
+        if profile == self.profile() && self.deployed() {
+            return Err(ToryggError::IsDeployed)
+        }
+
+        fs::remove_dir_all(profile.dir()?)?;
+
+        if profile == self.profile() {
+            self.profile = Self::default_profile();
+        }
+
         Ok(())
     }
 
@@ -98,19 +190,22 @@ impl ToryggState {
         fs::write(Self::path(), toml::to_string(self).unwrap())
     }
 
+    #[must_use]
     pub fn read_or_new() -> ToryggState {
         ToryggState::read().unwrap_or_else(|_| ToryggState::new())
     }
 
     pub fn deploy(&mut self) -> Result<(), ToryggError> {
-        if self.deployed.is_some() {
+        if self.deployed() {
             return Err(ToryggError::Other("Already Deployed".to_owned()))
         }
 
+        // If there are no mods to deploy then we don't need to do anything
         let Some(mods) = self.profile.enabled_mods() else {
             return Ok(())
         };
 
+        // Take note of pre-existing files
         let data_path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data");
         let unmanaged_files = WalkDir::new(&data_path).min_depth(1).into_iter()
             .filter_map(|entry| Some(entry.ok()?.path().to_owned()))
@@ -125,7 +220,6 @@ impl ToryggState {
             for entry in WalkDir::new(&dir).min_depth(1) {
                 let entry = entry.unwrap();
                 let path = entry.path();
-
 
                 let relative_path = path.strip_prefix(&dir).unwrap();
                 let to_relative_path = find_case_insensitive_path(&data_path, relative_path);
@@ -158,7 +252,7 @@ impl ToryggState {
         }
 
         if !result.is_empty() {
-            self.deployed = Some(result);
+            self.deployed_files = Some(result);
             self.write()?;
         }
 
@@ -166,33 +260,37 @@ impl ToryggState {
     }
 
     pub fn undeploy(&mut self) -> Result<(), ToryggError> {
-        if let Some(deployed) = &self.deployed {
-            let data_path = SKYRIM_SPECIAL_EDITION.install_dir()?.join("Data");
-            for relative_path in deployed.iter().rev() {
-                let path = data_path.join(relative_path);
-                if path.is_dir() {
-                    fs::remove_dir(path)?;
-                } else {
-                    fs::remove_file(path)?;
-                }
+        let Some(deployed) = &self.deployed_files else {
+            return Err(ToryggError::IsNotDeployed)
+        };
+
+        // Remove mod files
+        let data_path = SKYRIM_SPECIAL_EDITION.install_dir()?.join("Data");
+        for relative_path in deployed.iter().rev() {
+            let path = data_path.join(relative_path);
+            if path.is_dir() {
+                fs::remove_dir(path)?;
+            } else {
+                fs::remove_file(path)?;
             }
+        }
 
-            self.deployed = None;
-            self.write().unwrap();
+        self.deployed_files = None;
+        self.write().unwrap();
 
-            let backup_dir = data_dir().join("Backup");
-            for entry in WalkDir::new(&backup_dir).min_depth(1).contents_first(true) {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                let relative_path = path.strip_prefix(&backup_dir).unwrap();
-                let to_path = data_path.join(relative_path);
+        // Restore any backed up files
+        let backup_dir = data_dir().join("Backup");
+        for entry in WalkDir::new(&backup_dir).min_depth(1).contents_first(true) {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let relative_path = path.strip_prefix(&backup_dir).unwrap();
+            let to_path = data_path.join(relative_path);
 
-                if path.is_file() {
-                    info!("{}", relative_path.display());
-                    fs::rename(path, to_path).unwrap();
-                } else {
-                    fs::remove_dir(path).unwrap();
-                }
+            if path.is_file() {
+                info!("{}", relative_path.display());
+                fs::rename(path, to_path).unwrap();
+            } else {
+                fs::remove_dir(path).unwrap();
             }
         }
 

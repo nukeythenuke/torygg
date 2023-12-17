@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use crate::error::ToryggError;
-use crate::{config, modmanager};
+use crate::{config, modmanager, Torygg};
 use crate::util::verify_directory;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -16,7 +16,7 @@ impl std::str::FromStr for Profile {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for profile in profiles().map_err(|e| anyhow!(e))? {
+        for profile in Torygg::profiles().map_err(|e| anyhow!(e))? {
             if profile.name() == s {
                 return Ok(profile)
             }
@@ -27,7 +27,7 @@ impl std::str::FromStr for Profile {
 }
 
 impl Profile {
-    pub fn new(profile_name: &str) -> Result<Profile, ToryggError> {
+    pub(crate) fn new(profile_name: &str) -> Result<Profile, ToryggError> {
         let path = config::config_dir().join(profile_name);
         if path.exists() {
             return Err(ToryggError::ProfileAlreadyExists)
@@ -56,7 +56,7 @@ impl Profile {
         &self.name
     }
 
-    pub fn from_dir(profile_dir: &Path) -> Result<Profile, ToryggError> {
+    pub(crate) fn from_dir(profile_dir: &Path) -> Result<Profile, ToryggError> {
         let Ok(profile_string) = fs::read_to_string(profile_dir.join("profile.toml")) else {
             return Err(ToryggError::Other("failed to read profile.toml".to_owned()));
         };
@@ -96,16 +96,16 @@ impl Profile {
         Ok(())
     }
 
-    pub fn enable_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
+    pub(crate) fn activate_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
         self.set_mod_enabled(mod_name, true)
     }
 
-    pub fn disable_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
+    pub(crate) fn deactivate_mod(&mut self, mod_name: &String) -> Result<(), ToryggError> {
         self.set_mod_enabled(mod_name, false)
     }
 
     #[must_use]
-    pub fn mod_enabled(&self, mod_name: &String) -> bool {
+    pub(crate) fn mod_enabled(&self, mod_name: &String) -> bool {
         match &self.mods {
             Some(mods) => mods.contains(mod_name),
             None => false
@@ -113,37 +113,17 @@ impl Profile {
     }
 
     #[must_use]
-    pub fn enabled_mods(&self) -> Option<&Vec<String>> {
+    pub(crate) fn enabled_mods(&self) -> Option<&Vec<String>> {
         self.mods.as_ref()
     }
 
-    pub fn dir(&self) -> Result<PathBuf, ToryggError> {
+    pub(crate) fn dir(&self) -> Result<PathBuf, ToryggError> {
         let dir = config::config_dir().join(&self.name);
         verify_directory(&dir)?;
         Ok(dir)
     }
 
-    pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {
-        Ok(config::mods_dir())
-    }
-}
-
-pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
-    let profs = fs::read_dir(config::config_dir())?
-        .filter_map(|e| Some(e.ok()?.path()))
-        .filter_map(|e| {
-            if e.is_dir() {
-                Profile::from_dir(&e).ok()
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    if profs.is_empty() {
-        Profile::new("Default").unwrap();
-        return profiles()
-    }
-
-    Ok(profs)
+    //pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {
+    //    Ok(config::mods_dir())
+    //}
 }
