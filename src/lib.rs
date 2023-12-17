@@ -4,3 +4,4 @@ pub mod error;
 pub mod profile;
 pub mod util;
 pub mod modmanager;
+pub mod state;

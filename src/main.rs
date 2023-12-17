@@ -1,104 +1,13 @@
 use std::fs;
 use std::io::{stdin, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
-
 use clap::{Parser, Subcommand};
-use log::{error, info};
-use serde::{Deserialize, Serialize};
+use log::info;
 use simplelog::TermLogger;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use walkdir::WalkDir;
 
-use torygg::{profile::{Profile, profiles}, modmanager};
-use torygg::config::{data_dir};
+use torygg::{profile::{Profile, profiles}, modmanager, state::ToryggState};
 use torygg::error::ToryggError;
-use torygg::games::SKYRIM_SPECIAL_EDITION;
-
-mod serde_profile {
-    use std::fmt::Formatter;
-    use std::str::FromStr;
-    use serde::{de, Deserializer, Serializer};
-    use serde::de::{Visitor};
-    use torygg::profile::{Profile};
-
-    struct ProfileVisitor;
-
-    impl<'de> Visitor<'de> for ProfileVisitor {
-        type Value = Profile;
-
-        fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-            write!(formatter, "name of a profile")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error {
-            Profile::from_str(v).map_err(|_| de::Error::invalid_value(de::Unexpected::Str(v), &self))
-        }
-    }
-
-    pub fn serialize<S>(profile: &Profile, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer  {
-        serializer.serialize_str(profile.name())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Profile, D::Error> where D: Deserializer<'de> {
-        deserializer.deserialize_str(ProfileVisitor)
-    }
-}
-
-/// Torygg's persistent state
-#[derive(Serialize, Deserialize)]
-struct ToryggState {
-    //game: &'static SteamApp,
-    #[serde(with = "serde_profile")]
-    profile: Profile,
-    deployed: Option<Vec<PathBuf>>
-}
-
-impl ToryggState {
-    // fn game(&self) -> &'static SteamApp {
-    //     self.game
-    // }
-
-    fn new() -> ToryggState {
-        let state = ToryggState {
-            profile: profiles().unwrap().first().unwrap().clone(),
-            deployed: None
-        };
-        state.write().unwrap();
-        state
-    }
-
-    fn profile(&self) -> &Profile {
-        &self.profile
-    }
-
-    fn profile_mut(&mut self) -> &mut Profile {
-        &mut self.profile
-    }
-
-    fn set_profile(&mut self, name: &str) -> Result<(), ToryggError> {
-        self.profile = Profile::from_str(name).map_err(|_| ToryggError::Other("failed to find profile".to_owned()))?;
-        self.write()?;
-        Ok(())
-    }
-
-    fn path() -> PathBuf {
-        data_dir().join(".toryggstate.toml")
-    }
-
-    fn read() -> Result<ToryggState, ToryggError> {
-        let s = fs::read_to_string(Self::path())?;
-        toml::from_str(&s).map_err(|_| ToryggError::Other("Failed to parse state toml".to_owned()))
-    }
-
-    fn write(&self) -> Result<(), std::io::Error> {
-        fs::write(Self::path(), toml::to_string(self).unwrap())
-    }
-
-    fn read_or_new() -> ToryggState {
-        ToryggState::read().unwrap_or_else(|_| ToryggState::new())
-    }
-}
 
 fn list_profiles(state: &ToryggState) -> Result<(), ToryggError> {
     let mut stdout = StandardStream::stdout(termcolor::ColorChoice::Always);
@@ -289,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Some(Subcommands::LoadOrder) => {
             print_header("Files");
-            if let Some(mods) = state.profile.enabled_mods() {
+            if let Some(mods) = state.profile().enabled_mods() {
                 for (i, m) in mods.iter().enumerate() {
                     println!("{}. {m}", i + 1);
                 }
@@ -319,49 +228,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let dir = profile.dir()?;
             fs::remove_dir_all(dir)?;
 
-            if profile == state.profile {
-                ToryggState::new();
+            if profile == *state.profile() {
+                let _state = ToryggState::new();
             }
         }
 
         Some(Subcommands::Deploy) => {
-            if state.deployed.is_some() {
-                error!("Already Deployed")
-            } else {
-                state.deployed = state.profile.deploy()?;
-                state.write().unwrap();
-            }
-
+            state.deploy()?;
         }
 
         Some(Subcommands::Undeploy) => {
-            if let Some(deployed) = state.deployed {
-                for relative_path in deployed.iter().rev() {
-                    let path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data").join(relative_path);
-                    if path.is_dir() {
-                        fs::remove_dir(path).unwrap();
-                    } else {
-                        fs::remove_file(path).unwrap();
-                    }
-                }
-
-                state.deployed = None;
-                state.write().unwrap();
-
-                let backup_dir = data_dir().join("Backup");
-                for entry in WalkDir::new(&backup_dir).min_depth(1).contents_first(true) {
-                    let entry = entry.unwrap();
-                    let path = entry.path();
-                    let relative_path = path.strip_prefix(&backup_dir).unwrap();
-                    let to_path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data").join(relative_path);
-
-                    if path.is_file() {
-                        fs::rename(path, to_path).unwrap();
-                    } else {
-                        fs::remove_dir(path).unwrap();
-                    }
-                }
-            }
+            state.undeploy()?;
         }
 
         None => {
