@@ -2,9 +2,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
+use walkdir::WalkDir;
 use crate::error::ToryggError;
 use crate::{config, modmanager};
-use crate::util::verify_directory;
+use crate::config::data_dir;
+use crate::games::SKYRIM_SPECIAL_EDITION;
+use crate::util::{find_case_insensitive_path, verify_directory};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Profile {
@@ -123,20 +126,62 @@ impl Profile {
         Ok(dir)
     }
 
-    pub fn appdata_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = self.dir()?.join("AppData");
-        verify_directory(&dir)?;
-        Ok(dir)
-    }
-
     pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {
         Ok(config::mods_dir())
     }
 
-    pub fn overwrite_dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = self.dir()?.join("Overwrite");
-        verify_directory(&dir)?;
-        Ok(dir)
+    pub fn deploy(&self) -> Result<Option<Vec<PathBuf>>, ToryggError> {
+        let Some(mods) = self.enabled_mods() else {
+            return Ok(None)
+        };
+
+        let data_path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data");
+        let unmanaged_files = WalkDir::new(&data_path).min_depth(1).into_iter()
+            .filter_map(|entry| Some(entry.ok()?.path().to_owned()))
+            .collect::<Vec<_>>();
+
+        let backup_dir = data_dir().join("Backup");
+        verify_directory(&backup_dir).unwrap();
+
+        let mut result  = Vec::new();
+        for m in mods {
+            let dir = config::mods_dir().join(m);
+            for entry in WalkDir::new(&dir).min_depth(1) {
+                let entry = entry.unwrap();
+                let path = entry.path();
+
+
+                let relative_path = path.strip_prefix(&dir).unwrap();
+                let to_relative_path = find_case_insensitive_path(&data_path, relative_path);
+                let to_path = data_path.join(&to_relative_path);
+
+                if path.is_dir() {
+                    if to_path.is_dir() {
+                        continue;
+                    }
+
+                    fs::create_dir(&to_path).unwrap();
+                    result.push(to_relative_path);
+                } else {
+                    println!("{} -> {}", relative_path.display(), to_relative_path.display());
+
+                    if to_path.exists() && unmanaged_files.contains(&to_path) {
+                        let backup_path = backup_dir.join(&to_relative_path);
+                        for dir in to_relative_path.parent().unwrap() {
+                            verify_directory(&backup_dir.join(dir)).unwrap();
+                        }
+                        fs::rename(&to_path, &backup_path).unwrap();
+                    }
+
+                    fs::copy(path, &to_path).unwrap();
+                    if !result.contains(&to_relative_path) {
+                        result.push(to_relative_path);
+                    }
+                }
+            }
+        }
+
+        Ok(Some(result))
     }
 }
 

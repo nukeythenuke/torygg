@@ -4,14 +4,16 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
-use log::info;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use simplelog::TermLogger;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use walkdir::WalkDir;
 
 use torygg::{profile::{Profile, profiles}, modmanager};
 use torygg::config::{data_dir};
 use torygg::error::ToryggError;
+use torygg::games::SKYRIM_SPECIAL_EDITION;
 
 mod serde_profile {
     use std::fmt::Formatter;
@@ -48,7 +50,8 @@ mod serde_profile {
 struct ToryggState {
     //game: &'static SteamApp,
     #[serde(with = "serde_profile")]
-    profile: Profile
+    profile: Profile,
+    deployed: Option<Vec<PathBuf>>
 }
 
 impl ToryggState {
@@ -57,7 +60,10 @@ impl ToryggState {
     // }
 
     fn new() -> ToryggState {
-        let state = ToryggState { profile: profiles().unwrap().first().unwrap().clone() };
+        let state = ToryggState {
+            profile: profiles().unwrap().first().unwrap().clone(),
+            deployed: None
+        };
         state.write().unwrap();
         state
     }
@@ -215,6 +221,10 @@ enum Subcommands {
         /// profile to delete
         profile: Profile,
     },
+
+    Deploy,
+
+    Undeploy,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -311,6 +321,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if profile == state.profile {
                 ToryggState::new();
+            }
+        }
+
+        Some(Subcommands::Deploy) => {
+            if state.deployed.is_some() {
+                error!("Already Deployed")
+            } else {
+                state.deployed = state.profile.deploy()?;
+                state.write().unwrap();
+            }
+
+        }
+
+        Some(Subcommands::Undeploy) => {
+            if let Some(deployed) = state.deployed {
+                for relative_path in deployed.iter().rev() {
+                    let path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data").join(relative_path);
+                    if path.is_dir() {
+                        fs::remove_dir(path).unwrap();
+                    } else {
+                        fs::remove_file(path).unwrap();
+                    }
+                }
+
+                state.deployed = None;
+                state.write().unwrap();
+
+                let backup_dir = data_dir().join("Backup");
+                for entry in WalkDir::new(&backup_dir).min_depth(1).contents_first(true) {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    let relative_path = path.strip_prefix(&backup_dir).unwrap();
+                    let to_path = SKYRIM_SPECIAL_EDITION.install_dir().unwrap().join("Data").join(relative_path);
+
+                    if path.is_file() {
+                        fs::rename(path, to_path).unwrap();
+                    } else {
+                        fs::remove_dir(path).unwrap();
+                    }
+                }
             }
         }
 
