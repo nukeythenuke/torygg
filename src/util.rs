@@ -45,25 +45,26 @@ pub fn verify_directory(path: &Path) -> Result<(), ToryggError> {
 
 pub fn find_case_insensitive_path(root: &Path, relative: &Path) -> PathBuf {
     let mut result = PathBuf::new();
-    for component in relative.components() {
-        let mut path_exists = true;
-        if path_exists {
-            let mut found = false;
-            for entry in fs::read_dir(root.join(&result)).unwrap() {
-                let entry = entry.unwrap();
-                let file_name = entry.file_name();
-                if unicase::eq(&file_name.to_string_lossy(), &component.as_os_str().to_string_lossy()) {
-                    result.push(file_name);
-                    found = true;
-                    break;
-                }
-            }
+    let components = relative.components();
+    let mut path_exists = true;
+    for component in components {
+        if !path_exists {
+            result.push(component);
+            continue;
+        }
 
-            path_exists = found;
-            if !path_exists {
-                result.push(component);
+        let mut found = false;
+        for entry in root.join(&result).read_dir().unwrap().filter_map(Result::ok) {
+            let file_name = entry.file_name();
+            if unicase::eq(&file_name.to_string_lossy(), &component.as_os_str().to_string_lossy()) {
+                result.push(file_name);
+                found = true;
+                break;
             }
-        } else {
+        }
+
+        if !found {
+            path_exists = false;
             result.push(component);
         }
     }

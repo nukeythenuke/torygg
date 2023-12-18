@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{stdin, Write};
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -5,7 +6,7 @@ use log::info;
 use simplelog::TermLogger;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 
-use torygg::Torygg;
+use torygg::{Plugin, Torygg, GroupType, FileGroup};
 use torygg::Profile;
 
 fn list_profiles(state: &Torygg) -> Result<(), torygg::Error> {
@@ -69,6 +70,35 @@ fn print_header(header: &str) {
     stdout.set_color(&header_spec).unwrap();
     println!("{header}:");
     stdout.reset().unwrap();
+}
+
+fn get_input(group: &FileGroup) -> Vec<&Plugin> {
+    let options = group.plugins().iter().map(|plugin| {
+        (plugin.name(), plugin) }).collect::<HashMap<_, _>>();
+
+    let items = options.keys().collect::<Vec<_>>();
+    match group.group_type() {
+        GroupType::SelectExactlyOne => {
+            let selection = dialoguer::Select::new().with_prompt(group.name())
+                .items(&items)
+                .interact().unwrap();
+
+            vec![options[items[selection]]]
+        }
+        GroupType::SelectAny => {
+            let selection = dialoguer::MultiSelect::new().with_prompt(group.name())
+                .items(&options.keys().collect::<Vec<_>>())
+                .interact().unwrap();
+
+            selection.into_iter().map(|i| options[items[i]]).collect()
+        }
+        GroupType::SelectAll => {
+            dialoguer::Select::new().with_prompt(group.name())
+                .items(&items).interact().unwrap();
+
+            options.into_values().collect()
+        }
+    }
 }
 
 #[derive(Parser)]
@@ -180,7 +210,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             info!("Installing {} as {name}", archive.display());
-            Torygg::install_mod(&archive, &name)?;
+            Torygg::install_mod(&archive, &name, |step| -> Vec<&Plugin> {
+                let Some(groups) = step.file_groups() else {
+                    return Vec::new()
+                };
+
+                println!("{}", step.name());
+                groups.iter().flat_map(get_input).collect()
+            })?;
         },
 
         Some(Subcommands::Uninstall { name }) => Torygg::uninstall_mod(&name)?,

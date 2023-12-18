@@ -6,6 +6,7 @@ use walkdir::WalkDir;
 use crate::{config, modmanager};
 use crate::config::data_dir;
 use crate::error::ToryggError;
+use crate::fomod::FomodCallback;
 use crate::games::SKYRIM_SPECIAL_EDITION;
 use crate::profile::Profile;
 use crate::util::{find_case_insensitive_path, verify_directory};
@@ -41,7 +42,7 @@ mod serde_profile {
 }
 
 /// Torygg's persistent state
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ToryggState {
     //game: &'static SteamApp,
     #[serde(with = "serde_profile")]
@@ -64,7 +65,7 @@ impl ToryggState {
     pub fn new() -> ToryggState {
         let state = ToryggState {
             profile: Self::default_profile(),
-            deployed_files: None
+            deployed_files: None,
         };
         state.write().unwrap();
         state
@@ -82,8 +83,8 @@ impl ToryggState {
         modmanager::installed_mods()
     }
 
-    pub fn install_mod(archive: &Path, name: &String) -> Result<(), ToryggError> {
-        modmanager::install_mod(archive, name)
+    pub fn install_mod(archive: &Path, name: &String, fomod_callback: FomodCallback) -> Result<(), ToryggError> {
+        modmanager::install_mod(archive, name, fomod_callback)
     }
 
     pub fn uninstall_mod(name: &String) -> Result<(), ToryggError> {
@@ -183,7 +184,7 @@ impl ToryggState {
 
     fn read() -> Result<ToryggState, ToryggError> {
         let s = fs::read_to_string(Self::path())?;
-        toml::from_str(&s).map_err(|_| ToryggError::Other("Failed to parse state toml".to_owned()))
+        toml::from_str::<ToryggState>(&s).map_err(|_| ToryggError::Other("Failed to parse state toml".to_owned()))
     }
 
     fn write(&self) -> Result<(), std::io::Error> {
