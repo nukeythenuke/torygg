@@ -8,6 +8,6 @@ authors = ["Norman McKeown <normanmckeown@duck.com>"]
 edition = "2021"
 license = "MIT"
 
-[lints.clippy]
-pedantic = "warn"
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
 unreadable_literal = "allow"
