@@ -6,6 +6,7 @@ resolver = "2"
 version = "0.1.0"
 authors = ["Norman McKeown <normanmckeown@duck.com>"]
 edition = "2021"
+license = "MIT"
 
 [lints.clippy]
 pedantic = "warn"
