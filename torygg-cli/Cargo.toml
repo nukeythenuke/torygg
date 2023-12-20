@@ -1,0 +1,14 @@
+[package]
+name = "torygg-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+torygg = { path = "../torygg" }
+
+clap = { version = "4", features = ["derive"] }
+dialoguer = "0.11"
+log = "0.4"
+simplelog = "0.12"
+termcolor = "1"

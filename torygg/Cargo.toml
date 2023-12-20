@@ -1,0 +1,20 @@
+[package]
+name = "torygg"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+torygg-vdf = { git = "https://github.com/nukeythenuke/torygg-vdf" }
+
+anyhow = "1"
+dirs = "5"
+log = "0.4"
+xml-rs = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+tempfile = "3"
+toml = "0.8"
+thiserror = "1"
+typed-path = "0.7"
+unicase = "2"
+walkdir = "2"
