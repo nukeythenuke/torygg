@@ -1,5 +1,5 @@
 [workspace]
-members = ["torygg", "torygg-cli"]
+members = ["torygg", "torygg-cli", "torygg-vdf"]
 resolver = "2"
 
 [workspace.package]

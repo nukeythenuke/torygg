@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-torygg-vdf = { git = "https://github.com/nukeythenuke/torygg-vdf" }
+torygg-vdf = { path = "../torygg-vdf" }
 
 anyhow = "1"
 dirs = "5"

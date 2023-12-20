@@ -7,5 +7,6 @@ Workspace for torygg projects
 |------------|--------------|----------------------|
 | torygg     | library      | [link](./torygg)     |
 | torygg-cli | cli frontend | [link](./torygg-cli) |
+| torygg-vdf | vdf parser   | [link](./torygg-vdf) |
 
 
