@@ -75,7 +75,7 @@ impl ToryggState {
         Self::profiles().unwrap().first().unwrap().clone()
     }
 
-    fn deployed(&self) -> bool {
+    pub fn deployed(&self) -> bool {
         self.deployed_files.is_some()
     }
 
