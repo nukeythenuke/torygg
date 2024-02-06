@@ -7,7 +7,7 @@ use log::info;
 use walkdir::WalkDir;
 use crate::error::ToryggError;
 use crate::{config, modmanager};
-use crate::util::{find_case_insensitive_path, verify_directory};
+use crate::util::find_case_insensitive_path;
 
 pub(crate) type FomodCallback = fn(&InstallStep) -> Vec<&Plugin>;
 
@@ -252,8 +252,7 @@ pub(crate) fn fomod_install(mod_root: &Path, fomod_dir: &Path, name: &String, fo
 
     let plugins = install_steps.iter().flat_map(fomod_callback).collect::<Vec<_>>();
 
-    let install_path = config::mods_dir().join(name);
-    verify_directory(&install_path)?;
+    let install_path = config::mods_dir().maybe_create_child_directory(name)?;
 
     for plugin in plugins {
         let Some(files) = plugin.files() else {
@@ -267,10 +266,10 @@ pub(crate) fn fomod_install(mod_root: &Path, fomod_dir: &Path, name: &String, fo
                     let relative_path = find_case_insensitive_path(&install_path, destination);
 
                     for path in relative_path.ancestors().skip(1).collect::<Vec<_>>().iter().rev() {
-                        verify_directory(&install_path.join(path))?;
+                        let _ = install_path.maybe_create_child_directory(path)?;
                     }
 
-                    let to = install_path.join(&relative_path);
+                    let to = install_path.as_ref().join(&relative_path);
 
                     info!("{from:?} -> {to:?}");
                     fs::copy(from, to)?;
@@ -285,7 +284,7 @@ pub(crate) fn fomod_install(mod_root: &Path, fomod_dir: &Path, name: &String, fo
                         let relative_path = from.strip_prefix(mod_root.join(source)).unwrap();
                         let relative_path = destination.join(relative_path);
                         let relative_path = find_case_insensitive_path(&install_path, &relative_path);
-                        let to = install_path.join(destination).join(relative_path);
+                        let to = install_path.maybe_create_child_directory(destination)?.as_ref().join(relative_path);
 
                         info!("{from:?} -> {to:?}");
 

@@ -1,10 +1,9 @@
 use std::fs;
-use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use crate::error::ToryggError;
 use crate::{config, modmanager, Torygg};
-use crate::util::verify_directory;
+use crate::existing_directory::ExistingDirectory;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Profile {
@@ -28,12 +27,14 @@ impl std::str::FromStr for Profile {
 
 impl Profile {
     pub(crate) fn new(profile_name: &str) -> Result<Profile, ToryggError> {
-        let path = config::config_dir().join(profile_name);
-        if path.exists() {
+        let config_dir = config::config_dir();
+
+        if config_dir.existing_child_directory(profile_name).is_ok() {
             return Err(ToryggError::ProfileAlreadyExists)
         }
 
-        verify_directory(&path)?;
+        let _profile_dir = config_dir.maybe_create_child_directory(profile_name)?;
+
         let profile = Profile { name: profile_name.to_string(), mods: None };
         profile.write()?;
         Ok(profile)
@@ -45,7 +46,7 @@ impl Profile {
             Err(e) => return Err(ToryggError::Other(e.to_string()))
         };
 
-        match fs::write(self.dir()?.join("profile.toml"), string) {
+        match fs::write(self.dir()?.as_ref().join("profile.toml"), string) {
             Ok(()) => Ok(()),
             Err(e) => Err(ToryggError::IOError(e))
         }
@@ -56,8 +57,8 @@ impl Profile {
         &self.name
     }
 
-    pub(crate) fn from_dir(profile_dir: &Path) -> Result<Profile, ToryggError> {
-        let Ok(profile_string) = fs::read_to_string(profile_dir.join("profile.toml")) else {
+    pub(crate) fn from_dir(profile_dir: &ExistingDirectory) -> Result<Profile, ToryggError> {
+        let Ok(profile_string) = fs::read_to_string(profile_dir.as_ref().join("profile.toml")) else {
             return Err(ToryggError::Other("failed to read profile.toml".to_owned()));
         };
 
@@ -117,10 +118,8 @@ impl Profile {
         self.mods.as_ref()
     }
 
-    pub(crate) fn dir(&self) -> Result<PathBuf, ToryggError> {
-        let dir = config::config_dir().join(&self.name);
-        verify_directory(&dir)?;
-        Ok(dir)
+    pub(crate) fn dir(&self) -> Result<ExistingDirectory, ToryggError> {
+        config::config_dir().existing_child_directory(&self.name)
     }
 
     //pub fn mods_dir(&self) -> Result<&PathBuf, ToryggError> {

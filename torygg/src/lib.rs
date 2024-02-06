@@ -8,6 +8,8 @@ mod util;
 mod modmanager;
 mod state;
 mod fomod;
+mod existing_directory;
+
 pub use fomod::{
     Plugin,
     FileGroup,

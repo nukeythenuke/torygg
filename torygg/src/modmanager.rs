@@ -8,7 +8,6 @@ use walkdir::WalkDir;
 use crate::error::ToryggError;
 use crate::{config, fomod, Torygg};
 use crate::fomod::FomodCallback;
-use crate::util::verify_directory;
 
 /// Get a vec of all installed mods for the given game
 ///
@@ -19,7 +18,7 @@ use crate::util::verify_directory;
 /// Panics when a mods name cannot be determined from its path
 pub fn installed_mods() -> Result<Vec<String>, ToryggError>  {
     let mut mods = Vec::new();
-    for entry in config::mods_dir().read_dir().map_err(ToryggError::IOError)? {
+    for entry in fs::read_dir(config::mods_dir()).map_err(ToryggError::IOError)? {
         let entry = entry.map_err(ToryggError::IOError)?;
         let path = entry.path();
 
@@ -50,7 +49,8 @@ pub fn create_mod(mod_name: &String) -> Result<(), ToryggError> {
         return Err(ToryggError::ModAlreadyExists);
     }
 
-    verify_directory(&config::mods_dir().join(mod_name))
+    let _ = config::mods_dir().maybe_create_child_directory(mod_name)?;
+    Ok(())
 }
 
 fn extract_archive(archive: &Path) -> Result<TempDir, ToryggError> {
@@ -72,8 +72,7 @@ fn extract_archive(archive: &Path) -> Result<TempDir, ToryggError> {
 }
 
 pub(crate) fn install_all(mod_root: &Path, name: &String) -> Result<(), ToryggError> {
-    let install_path = config::mods_dir().join(name);
-    verify_directory(&install_path)?;
+    let install_path = config::mods_dir().maybe_create_child_directory(name)?;
 
     let entries = WalkDir::new(mod_root)
         .min_depth(1).into_iter()
@@ -82,7 +81,7 @@ pub(crate) fn install_all(mod_root: &Path, name: &String) -> Result<(), ToryggEr
     for entry in entries {
         let from = entry.path();
         let relative_path = from.strip_prefix(mod_root).unwrap();
-        let to = install_path.join(relative_path);
+        let to = install_path.as_ref().join(relative_path);
 
         if from.is_dir() {
             fs::create_dir(to)?;
@@ -167,6 +166,6 @@ pub fn uninstall_mod(name: &String) -> Result<(), ToryggError> {
         profile.deactivate_mod(name)?;
     }
 
-    let mod_dir = config::mods_dir().join(name);
+    let mod_dir = config::mods_dir().existing_child_directory(name)?;
     fs::remove_dir_all(mod_dir).map_err(ToryggError::IOError)
 }

@@ -1,6 +1,6 @@
 use crate::error::ToryggError;
 use std::path::Path;
-use std::{fs, fs::File, path::PathBuf};
+use std::{fs::File, path::PathBuf};
 use crate::games::SteamApp;
 
 #[must_use]
@@ -30,20 +30,10 @@ pub fn steam_library(app: &SteamApp) -> Result<PathBuf, ToryggError> {
     Err(ToryggError::SteamLibraryNotFound)
 }
 
-pub fn verify_directory(path: &Path) -> Result<(), ToryggError> {
-    if path.exists() {
-        return if path.is_dir() {
-            Ok(())
-        } else {
-            Err(ToryggError::NotADirectory(path.to_owned()))
-        };
-    }
+pub fn find_case_insensitive_path<P1: AsRef<Path>, P2: AsRef<Path>>(root: P1, relative: P2) -> PathBuf {
+    let root = root.as_ref();
+    let relative = relative.as_ref();
 
-    fs::create_dir(path)?;
-    Ok(())
-}
-
-pub fn find_case_insensitive_path(root: &Path, relative: &Path) -> PathBuf {
     let mut result = PathBuf::new();
     let components = relative.components();
     let mut path_exists = true;

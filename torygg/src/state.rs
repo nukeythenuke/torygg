@@ -6,10 +6,11 @@ use walkdir::WalkDir;
 use crate::{config, modmanager};
 use crate::config::data_dir;
 use crate::error::ToryggError;
+use crate::existing_directory::ExistingDirectory;
 use crate::fomod::FomodCallback;
 use crate::games::SKYRIM_SPECIAL_EDITION;
 use crate::profile::Profile;
-use crate::util::{find_case_insensitive_path, verify_directory};
+use crate::util::find_case_insensitive_path;
 
 mod serde_profile {
     use std::fmt::Formatter;
@@ -124,13 +125,8 @@ impl ToryggState {
     pub fn profiles() -> Result<Vec<Profile>, ToryggError> {
         let profs = fs::read_dir(config::config_dir())?
             .filter_map(|e| Some(e.ok()?.path()))
-            .filter_map(|e| {
-                if e.is_dir() {
-                    Profile::from_dir(&e).ok()
-                } else {
-                    None
-                }
-            })
+            .filter_map(|e| ExistingDirectory::try_from(e).ok())
+            .filter_map(|e| Profile::from_dir(&e).ok())
             .collect::<Vec<_>>();
 
         if profs.is_empty() {
@@ -179,7 +175,7 @@ impl ToryggState {
     }
 
     fn path() -> PathBuf {
-        data_dir().join(".toryggstate.toml")
+        data_dir().as_ref().join(".toryggstate.toml")
     }
 
     fn read() -> Result<ToryggState, ToryggError> {
@@ -212,12 +208,13 @@ impl ToryggState {
             .filter_map(|entry| Some(entry.ok()?.path().to_owned()))
             .collect::<Vec<_>>();
 
-        let backup_dir = data_dir().join("Backup");
-        verify_directory(&backup_dir)?;
+        let backup_dir = data_dir().maybe_create_child_directory("Backup")?;
 
         let mut result  = Vec::new();
         for m in mods {
-            let dir = config::mods_dir().join(m);
+            let dir = config::mods_dir().existing_child_directory(m)
+                .expect("mod directory does not exist");
+
             for entry in WalkDir::new(&dir).min_depth(1) {
                 let entry = entry.unwrap();
                 let path = entry.path();
@@ -237,9 +234,9 @@ impl ToryggState {
                     info!("{} -> {}", relative_path.display(), to_relative_path.display());
 
                     if to_path.exists() && unmanaged_files.contains(&to_path) {
-                        let backup_path = backup_dir.join(&to_relative_path);
+                        let backup_path = backup_dir.as_ref().join(&to_relative_path);
                         for dir in to_relative_path.parent().unwrap() {
-                            verify_directory(&backup_dir.join(dir))?;
+                            let _ = backup_dir.maybe_create_child_directory(dir)?;
                         }
                         fs::rename(&to_path, &backup_path)?;
                     }
@@ -280,7 +277,7 @@ impl ToryggState {
         self.write().unwrap();
 
         // Restore any backed up files
-        let backup_dir = data_dir().join("Backup");
+        let backup_dir = data_dir().maybe_create_child_directory("Backup")?;
         for entry in WalkDir::new(&backup_dir).min_depth(1).contents_first(true) {
             let entry = entry.unwrap();
             let path = entry.path();
