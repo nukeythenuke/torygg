@@ -1,4 +1,5 @@
 mod config;
+pub use config::init_default as init_default;
 mod games;
 mod error;
 pub use error::ToryggError as Error;

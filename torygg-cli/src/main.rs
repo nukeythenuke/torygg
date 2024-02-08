@@ -176,6 +176,8 @@ enum Subcommands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    torygg::init_default();
+
     let cli = Cli::parse();
 
     TermLogger::init(

@@ -1,39 +1,57 @@
 use std::sync::OnceLock;
 use crate::existing_directory::ExistingDirectory;
 
-static APP_NAME: &str = "torygg";
+static CONFIG_DIR: OnceLock<ExistingDirectory> = OnceLock::new();
+static DATA_DIR: OnceLock<ExistingDirectory> = OnceLock::new();
 
-/// Get torygg's config directory
+/// # Panics
+///
+/// Panics if already initialized
+pub fn init(config: ExistingDirectory, data: ExistingDirectory) {
+    CONFIG_DIR.set(config).expect("failed to initialize config_dir");
+    DATA_DIR.set(data).expect("failed to initialize data_dir");
+}
+
+/// # Panics
+///
+/// Panics if either the config or data directories could not be determined or created
+pub fn init_default() {
+    let config = ExistingDirectory::maybe_create(dirs::config_dir().expect("could not find location for config directory"))
+            .expect("could not create user config directory")
+            .maybe_create_child_directory("torygg")
+            .expect("could not create config directory");
+
+    let data = ExistingDirectory::maybe_create(dirs::data_dir().expect("could not find location for data directory"))
+            .expect("could not create user data directory")
+            .maybe_create_child_directory("torygg")
+            .expect("could not create data directory");
+
+    init(config, data);
+}
+
+/// Get the config directory
 ///
 /// # Panics
-/// Panics when `dirs::config_dir` returns `None` or the directory does not exist and cannot be created
+///
+/// Panics when `CONFIG_DIR` has not been initialized
 pub fn config_dir() -> &'static ExistingDirectory {
-    static CONFIG_DIR: OnceLock<ExistingDirectory> = OnceLock::new();
-    CONFIG_DIR.get_or_init(|| {
-        let  path = dirs::config_dir().expect("could not find location for config directory");
-        let dir = path.join(APP_NAME);
-        ExistingDirectory::maybe_create(dir).expect("could not create config directory")
-    })
+    CONFIG_DIR.get().expect("config dir not initialized")
 }
 
-/// Get torygg's data directory
+/// Get the data directory
 ///
 /// # Panics
-/// Panics when `dirs::data_dir()` returns `None` or the directory does not exist and cannot be created
+///
+/// Panics when `DATA_DIR` has not been initialized
 pub fn data_dir() -> &'static ExistingDirectory {
-    static DATA_DIR: OnceLock<ExistingDirectory> = OnceLock::new();
-    DATA_DIR.get_or_init(|| {
-        let path = dirs::data_dir().expect("Could not find location for data directory");
-        let dir = path.join(APP_NAME);
-        ExistingDirectory::maybe_create(dir).expect("Could not create data directory")
-    })
+    DATA_DIR.get().expect("data dir not initialized")
 }
 
-/// Get the directory in which torygg stores its mods for a given game
+/// Get the directory in which torygg stores its mods
 ///
 /// # Panics
-/// Panics when `data_dir` panics or the directory does not exist and cannot be created
-pub fn mods_dir() -> &'static ExistingDirectory {
-    static MODS_DIR: OnceLock<ExistingDirectory> = OnceLock::new();
-    MODS_DIR.get_or_init(|| { data_dir().maybe_create_child_directory("Mods").expect("Could not create mods directory") })
+///
+/// Panics when `DATA_DIR` has not been initialized
+pub fn mods_dir() -> ExistingDirectory {
+    data_dir().maybe_create_child_directory("Mods").expect("Could not create mods directory")
 }
