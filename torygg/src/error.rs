@@ -7,8 +7,8 @@ pub enum ToryggError {
     #[error("mod already exists")]
     ModAlreadyExists,
 
-    #[error("profile already exists")]
-    ProfileAlreadyExists,
+    #[error("profile '{0}' already exists")]
+    ProfileAlreadyExists(String),
 
     #[error("torygg is currently deployed")]
     IsDeployed,

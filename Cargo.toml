@@ -11,3 +11,4 @@ license = "MIT"
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 unreadable_literal = "allow"
+module_name_repetitions = "allow"

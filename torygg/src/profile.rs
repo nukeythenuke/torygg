@@ -30,7 +30,7 @@ impl Profile {
         let config_dir = config::config_dir();
 
         if config_dir.existing_child_directory(profile_name).is_ok() {
-            return Err(ToryggError::ProfileAlreadyExists)
+            return Err(ToryggError::ProfileAlreadyExists(profile_name.to_owned()))
         }
 
         let _profile_dir = config_dir.maybe_create_child_directory(profile_name)?;

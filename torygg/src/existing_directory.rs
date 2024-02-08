@@ -35,11 +35,15 @@ impl TryFrom<PathBuf> for ExistingDirectory {
     type Error = ToryggError;
 
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        if path.exists() && !path.is_dir() {
-            return Err(ToryggError::NotADirectory(path));
+        if path.exists() {
+            if !path.is_dir() {
+                return Err(ToryggError::NotADirectory(path));
+            }
+
+            return Ok(Self { path });
         }
 
-        Ok(Self { path })
+        Err(ToryggError::DirectoryNotFound(path))
     }
 }
 
